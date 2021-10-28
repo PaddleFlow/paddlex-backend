@@ -1,0 +1,79 @@
+description: Kubeflow PyTorchJob launcher
+inputs:
+- {name: name,                       type: String,                          description: 'PaddleJob name.'}
+- {name: namespace,                  type: String,      default: kubeflow,  description: 'PaddleJob namespace (likely your current namespace).'}
+- {name: version,                    type: String,      default: v1,        description: 'PaddleJob version.'}
+- {name: timeout_minutes,            type: Integer,     optional: true,     description: 'Time in minutes to wait for the PaddleJob to reach end.'}
+- {name: delete_after_done,          type: Boolean,     optional: true,     description: 'Whether to delete the job after it is finished.'}
+- {name: clean_pod_policy,           type: String,      optional: true,     description: 'Defines whether to clean pod after job finished.'}
+- {name: scheduling_policy,          type: JsonObject,  optional: true,     description: 'Defines the policy related to scheduling, for volcano.'}
+- {name: intranet,                   type: String,      optional: true,     description: 'Defines the communication mode inter pods : PodIP, Service or Host.'}
+- {name: with_gloo,                  type: Integer,     optional: true,     description: 'Indicate whether enable gloo, 0/1/2 for disable/enable for worker/enable for server.'}
+- {name: sampleset_ref,              type: JsonObject,  optional: true,     description: 'Defines the sample data set used for training and its mount path in worker pods.'}
+- {name: ps_spec,                    type: JsonObject,  optional: true,     description: 'Describes the spec of server base on pod template.'}
+- {name: worker_spec,                type: JsonObject,                      description: 'Describes the spec of worker base on pod template.'}
+- {name: heter_spec,                 type: JsonObject,  optional: true,     description: 'Describes the spec of heter worker base on pod temlate.'}
+- {name: elastic,                    type: Integer,     optional: true,     description: 'Indicate the elastic level.'}
+implementation:
+  container:
+    image: xiaolao/paddlejob-launcher:latest
+    command: [python, /paddle-launcher/launch_paddlejob.py]
+    args: 
+      - --name
+      - {inputValue: name}
+      - --namespace
+      - {inputValue: namespace}
+      - --version
+      - {inputValue: version}
+      - --worker
+      - {inputValue: worker_spec}
+      - if:
+          cond: {isPresent: timeout_minutes}
+          then:
+          - --timeoutMinutes
+          - {inputValue: timeout_minutes}
+      - if:
+          cond: {isPresent: delete_after_done}
+          then:
+          - --deleteAfterDone
+          - {inputValue: delete_after_done}
+      - if:
+          cond: {isPresent: clean_pod_policy}
+          then:
+          - --cleanPodPolicy
+          - {inputValue: clean_pod_policy}
+      - if:
+          cond: {isPresent: scheduling_policy }
+          then:
+          - --schedulingPolicy
+          - {inputValue: scheduling_policy }
+      - if:
+          cond: {isPresent: intranet}
+          then:
+          - --intranet
+          - {inputValue: intranet}
+      - if:
+          cond: {isPresent: with_gloo}
+          then:
+          - --withGloo
+          - {inputValue: with_gloo}
+      - if:
+          cond: {isPresent: sampleset_ref}
+          then:
+          - --sampleSetRef
+          - {inputValue: sampleset_ref}
+      - if:
+          cond: {isPresent: ps_spec }
+          then:
+          - --ps
+          - {inputValue: ps_spec }
+      - if:
+          cond: {isPresent: heter_spec}
+          then:
+          - --heter
+          - {inputValue: heter_spec}
+      - if:
+          cond: {isPresent: elastic}
+          then:
+          - --elastic
+          - {inputValue: elastic}
