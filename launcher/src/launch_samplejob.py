@@ -63,23 +63,23 @@ def main(argv=None):
                         help='Time in minutes to wait for the SampleJob to reach end')
     parser.add_argument('--deleteAfterDone', type=strtobool,
                         default=False,
-                        help='delete SampleJob after the job is done')
+                        help='Delete SampleJob after the job is done')
 
     parser.add_argument('--type', type=str,
                         default="sync",
                         help='Job Type of SampleJob. One of the four types: `sync`, `warmup`, `rmr`, `clear`')
     parser.add_argument('--sampleSetRef', type=yamlOrJsonStr,
                         default={},
-                        help='the information of reference SampleSet object')
+                        help='The information of reference SampleSet object.')
     parser.add_argument('--secretRef', type=yamlOrJsonStr,
                         default={},
-                        help='Used for sync job, if the source data storage requires additional authorization information')
+                        help='Used for sync job, if the source data storage requires additional authorization information.')
     parser.add_argument('--terminate', type=strtobool,
                         default=False,
                         help='terminate other jobs that already in event queue of runtime servers')
     parser.add_argument('--jobOptions', type=yamlOrJsonStr,
                         default={},
-                        help='options for SampleJob')
+                        help='Options for SampleJob.')
     args = parser.parse_args()
 
     logging.getLogger().setLevel(logging.INFO)

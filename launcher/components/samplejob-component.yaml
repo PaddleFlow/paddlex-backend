@@ -1,0 +1,52 @@
+description: Kubeflow PyTorchJob launcher
+inputs:
+- {name: name,                       type: String,                          description: 'SampleJob name.'}
+- {name: namespace,                  type: String,      default: kubeflow,  description: 'SampleJob namespace.'}
+- {name: version,                    type: String,      default: v1alpha1,  description: 'SampleJob version.'}
+- {name: timeout_minutes,            type: Integer,     optional: true,     description: 'Time in minutes to wait for the SampleJob to reach end'}
+- {name: delete_after_done,          type: Boolean,     optional: true,     description: 'Delete SampleJob after the job is done'}
+- {name: type,                       type: String,                          description: 'Job Type of SampleJob. One of the four types: `sync`, `warmup`, `rmr`, `clear`.'}
+- {name: sampleset_ref,              type: JsonObject,                      description: 'The information of reference SampleSet object.'}
+- {name: secret_ref,                 type: JsonObject,  optional: true,     description: 'Used for sync job, if the source data storage requires additional authorization information.'}
+- {name: terminate,                  type: Boolean,     optional: true,     description: 'Terminate other jobs that already in event queue of runtime servers.'}
+- {name: job_options,                type: JsonObject,  optional: true,     description: 'Number of retries before marking this job as failed.'}
+implementation:
+  container:
+    image: xiaolao/paddlejob-launcher:latest
+    command: [python, /paddle-launcher/launch_samplejob.py]
+    args: 
+      - --name
+      - {inputValue: name}
+      - --namespace
+      - {inputValue: namespace}
+      - --version
+      - {inputValue: version}
+      - --type
+      - {inputValue: type}
+      - --sampleSetRef
+      - {inputValue: sampleset_ref}
+      - if:
+          cond: {isPresent: timeout_minutes}
+          then:
+          - --timeoutMinutes
+          - {inputValue: timeout_minutes}
+      - if:
+          cond: {isPresent: delete_after_done}
+          then:
+          - --deleteAfterDone
+          - {inputValue: delete_after_done}
+      - if:
+          cond: {isPresent: secret_ref}
+          then:
+          - --secretRef
+          - {inputValue: secret_ref}
+      - if:
+          cond: {isPresent: terminate}
+          then:
+          - --terminate
+          - {inputValue: terminate}
+      - if:
+          cond: {isPresent: job_options}
+          then:
+          - --jobOptions
+          - {inputValue: job_options}
