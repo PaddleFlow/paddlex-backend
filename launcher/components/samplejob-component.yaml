@@ -1,4 +1,4 @@
-description: Kubeflow PyTorchJob launcher
+description: SampleJob Launcher
 inputs:
 - {name: name,                       type: String,                          description: 'SampleJob name.'}
 - {name: namespace,                  type: String,      default: kubeflow,  description: 'SampleJob namespace.'}
@@ -12,8 +12,8 @@ inputs:
 - {name: job_options,                type: JsonObject,  optional: true,     description: 'Number of retries before marking this job as failed.'}
 implementation:
   container:
-    image: xiaolao/paddlejob-launcher:latest
-    command: [python, /paddle-launcher/launch_samplejob.py]
+    image: xiaolao/paddle-launcher:latest
+    command: [python, launch_samplejob.py]
     args: 
       - --name
       - {inputValue: name}

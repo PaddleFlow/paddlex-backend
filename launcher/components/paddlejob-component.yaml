@@ -1,4 +1,4 @@
-description: Kubeflow PyTorchJob launcher
+description: PaddleJob Launcher
 inputs:
 - {name: name,                       type: String,                          description: 'PaddleJob name.'}
 - {name: namespace,                  type: String,      default: kubeflow,  description: 'PaddleJob namespace (likely your current namespace).'}
@@ -16,8 +16,8 @@ inputs:
 - {name: elastic,                    type: Integer,     optional: true,     description: 'Indicate the elastic level.'}
 implementation:
   container:
-    image: xiaolao/paddlejob-launcher:latest
-    command: [python, /paddle-launcher/launch_paddlejob.py]
+    image: xiaolao/paddle-launcher:latest
+    command: [python, launch_paddlejob.py]
     args: 
       - --name
       - {inputValue: name}

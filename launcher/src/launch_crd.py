@@ -22,117 +22,142 @@ from kubernetes.client import rest
 
 logger = logging.getLogger(__name__)
 
+
 class K8sCR(object):
-  def __init__(self, group, plural, version, client):
-    self.group = group
-    self.plural = plural
-    self.version = version
-    self.client = k8s_client.CustomObjectsApi(client)
+    def __init__(self, group, plural, version, client):
+        self.group = group
+        self.plural = plural
+        self.version = version
+        self.client = k8s_client.CustomObjectsApi(client)
 
-  def wait_for_condition(self,
-                         namespace,
-                         name,
-                         expected_conditions=[],
-                         timeout=datetime.timedelta(days=365),
-                         polling_interval=datetime.timedelta(seconds=30),
-                         status_callback=None):
-    """Waits until any of the specified conditions occur.
-    Args:
-      namespace: namespace for the CR.
-      name: Name of the CR.
-      expected_conditions: A list of conditions. Function waits until any of the
-        supplied conditions is reached.
-      timeout: How long to wait for the CR.
-      polling_interval: How often to poll for the status of the CR.
-      status_callback: (Optional): Callable. If supplied this callable is
-        invoked after we poll the CR. Callable takes a single argument which
-        is the CR.
-    """
-    end_time = datetime.datetime.now() + timeout
-    while True:
-      try:
-        results = self.client.get_namespaced_custom_object(
-          self.group, self.version, namespace, self.plural, name)
-      except Exception as e:
-        logger.error("There was a problem waiting for %s/%s %s in namespace %s; Exception: %s",
-                       self.group, self.plural, name, namespace, e)
-        raise
+    def wait_for_condition(self,
+                           namespace,
+                           name,
+                           expected_conditions=[],
+                           error_phases=[],
+                           timeout=datetime.timedelta(days=365),
+                           polling_interval=datetime.timedelta(seconds=30),
+                           status_callback=None):
+        """Waits until any of the specified conditions occur.
+            Args:
+              namespace: namespace for the CR.
+              name: Name of the CR.
+              expected_conditions: A list of conditions. Function waits until any of the
+                supplied conditions is reached.
+              error_phases: A list of phase string, if the phase of CR in this list, means
+                some error occurs.
+              timeout: How long to wait for the CR.
+              polling_interval: How often to poll for the status of the CR.
+              status_callback: (Optional): Callable. If supplied this callable is
+                invoked after we poll the CR. Callable takes a single argument which is the CR.
+        """
+        end_time = datetime.datetime.now() + timeout
+        while True:
+            try:
+                results = self.client.get_namespaced_custom_object(
+                    self.group, self.version, namespace, self.plural, name)
+            except Exception as e:
+                logger.error("There was a problem waiting for %s/%s %s in namespace %s; Exception: %s",
+                             self.group, self.plural, name, namespace, e)
+                raise
 
-      if results:
-        if status_callback:
-          status_callback(results)
-        expected, condition = self.is_expected_conditions(results, expected_conditions)
-        if expected:
-          logger.info("%s/%s %s in namespace %s has reached the expected condition: %s.",
-                       self.group, self.plural, name, namespace, condition)
-          return results
+            if results:
+                if status_callback:
+                    status_callback(results)
+                expected, condition = self.is_expected_conditions(results, expected_conditions)
+                if expected:
+                    logger.info("%s/%s %s in namespace %s has reached the expected condition: %s.",
+                                self.group, self.plural, name, namespace, condition)
+                    return results
+                else:
+                    if condition:
+                        logger.info("Current condition of %s/%s %s in namespace %s is %s.",
+                                    self.group, self.plural, name, namespace, condition)
+
+                phase = results.get("status", {}).get("phase", "")
+                if error_phases and phase and phase in error_phases:
+                    raise Exception("There are some errors in {0}/{1} {2} in namespace {3}, phase {4}."
+                                    .format(self.group, self.plural, name, namespace, phase))
+
+            if datetime.datetime.now() + polling_interval > end_time:
+                raise Exception(
+                    "Timeout waiting for {0}/{1} {2} in namespace {3} to enter one of the "
+                    "conditions {4}.".format(self.group, self.plural, name, namespace, expected_conditions))
+
+            time.sleep(polling_interval.seconds)
+
+    def is_expected_conditions(self, inst, expected_conditions):
+        conditions = inst.get('status', {}).get("conditions")
+        if not conditions:
+            return False, ""
+        if conditions[-1]["type"] in expected_conditions and conditions[-1]["status"] == "True":
+            return True, conditions[-1]["type"]
         else:
-          if condition:
-            logger.info("Current condition of %s/%s %s in namespace %s is %s.",
-                  self.group, self.plural, name, namespace, condition)
+            return False, conditions[-1]["type"]
 
-      if datetime.datetime.now() + polling_interval > end_time:
-        raise Exception(
-          "Timeout waiting for {0}/{1} {2} in namespace {3} to enter one of the "
-          "conditions {4}.".format(self.group, self.plural, name, namespace, expected_conditions))
+    def update(self, spec):
+        """Apply custom resource
+          Args:
+            spec: The spec for the CR
+        """
+        try:
+            name = spec["metadata"]["name"]
+            namespace = spec["metadata"].get("namespace", "default")
+            logger.info("Updating %s/%s %s in namespace %s.",
+                        self.group, self.plural, name, namespace)
+            api_response = self.client.patch_namespaced_custom_object(
+              self.group, self.version, namespace, self.plural, name, spec)
+            logger.info("Updated %s/%s %s in namespace %s.",
+                        self.group, self.plural, name, namespace)
+            return api_response
+        except rest.ApiException as e:
+            self._log_and_raise_exception(e, "update")
 
-      time.sleep(polling_interval.seconds)
+    def create(self, spec):
+        """Create a CR.
+        Args:
+          spec: The spec for the CR.
+        """
+        try:
+            # Create a Resource
+            namespace = spec["metadata"].get("namespace", "default")
+            logger.info("Creating %s/%s %s in namespace %s.",
+                        self.group, self.plural, spec["metadata"]["name"], namespace)
+            api_response = self.client.create_namespaced_custom_object(
+                self.group, self.version, namespace, self.plural, spec)
+            logger.info("Created %s/%s %s in namespace %s.",
+                        self.group, self.plural, spec["metadata"]["name"], namespace)
+            return api_response
+        except rest.ApiException as e:
+            self._log_and_raise_exception(e, "create")
 
-  def is_expected_conditions(self, inst, expected_conditions):
-      conditions = inst.get('status', {}).get("conditions")
-      if not conditions:
-          return False, ""
-      if conditions[-1]["type"] in expected_conditions and conditions[-1]["status"] == "True":
-          return True, conditions[-1]["type"]
-      else:
-          return False, conditions[-1]["type"]
+    def delete(self, name, namespace):
+        try:
+            logger.info("Deleteing %s/%s %s in namespace %s.",
+                        self.group, self.plural, name, namespace)
 
-  def create(self, spec):
-    """Create a CR.
-    Args:
-      spec: The spec for the CR.
-    """
-    try:
-      # Create a Resource
-      namespace = spec["metadata"].get("namespace", "default")
-      logger.info("Creating %s/%s %s in namespace %s.",
-        self.group, self.plural, spec["metadata"]["name"], namespace)
-      api_response = self.client.create_namespaced_custom_object(
-        self.group, self.version, namespace, self.plural, spec)
-      logger.info("Created %s/%s %s in namespace %s.",
-        self.group, self.plural, spec["metadata"]["name"], namespace)
-      return api_response
-    except rest.ApiException as e:
-      self._log_and_raise_exception(e, "create")
+            api_response = self.client.delete_namespaced_custom_object(
+                self.group, self.version, namespace, self.plural,
+                name, propagation_policy="Foreground")
 
-  def delete(self, name, namespace):
-    try:
-      logger.info("Deleteing %s/%s %s in namespace %s.",
-        self.group, self.plural, name, namespace)
+            logger.info("Deleted %s/%s %s in namespace %s.",
+                        self.group, self.plural, name, namespace)
 
-      api_response = self.client.delete_namespaced_custom_object(
-        self.group, self.version, namespace, self.plural,
-        name, propagation_policy="Foreground")
+            return api_response
+        except rest.ApiException as e:
+            self._log_and_raise_exception(e, "delete")
 
-      logger.info("Deleted %s/%s %s in namespace %s.",
-        self.group, self.plural, name, namespace)
+    def _log_and_raise_exception(self, ex, action):
+        message = ""
+        if ex.message:
+            message = ex.message
+        if ex.body:
+            try:
+                body = json.loads(ex.body)
+                message = body.get("message")
+            except ValueError:
+                logger.error("Exception when %s %s/%s: %s", action, self.group, self.plural, ex.body)
+                raise
 
-      return api_response
-    except rest.ApiException as e:
-      self._log_and_raise_exception(e, "delete")
-
-  def _log_and_raise_exception(self, ex, action):
-    message = ""
-    if ex.message:
-      message = ex.message
-    if ex.body:
-      try:
-        body = json.loads(ex.body)
-        message = body.get("message")
-      except ValueError:
         logger.error("Exception when %s %s/%s: %s", action, self.group, self.plural, ex.body)
-        raise
-
-    logger.error("Exception when %s %s/%s: %s", action, self.group, self.plural, ex.body)
-    raise ex
-
+        raise ex

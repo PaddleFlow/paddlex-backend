@@ -1,0 +1,8 @@
+# IDE
+.idea/
+.ijwb/
+*.iml
+*.swp
+
+# python sdk package
+*.tar.gz
