@@ -131,10 +131,15 @@ def main(argv=None):
         response = serving.create(inst)
     elif args.action == "update":
         response = serving.update(inst)
+    elif args.action == "apply":
+        response = serving.apply(inst)
     elif args.action == "delete":
         response = serving.delete(args.name, args.namespace)
+        print("Delete PaddleService have response {}".format(response))
+        return
     else:
-        raise Exception("action must be one of create/update/delete")
+        raise Exception("action must be one of create/update/apply/delete")
+
     print("{} PaddleService have response {}".format(args.action, response))
 
     kservice = KnativeService(client=api_client)

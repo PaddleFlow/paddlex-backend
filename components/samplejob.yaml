@@ -1,8 +1,10 @@
+name: SampleJob
 description: SampleJob Launcher
 inputs:
 - {name: name,                       type: String,                          description: 'SampleJob name.'}
 - {name: namespace,                  type: String,      default: kubeflow,  description: 'SampleJob namespace.'}
 - {name: version,                    type: String,      default: v1alpha1,  description: 'SampleJob version.'}
+- {name: action,                     type: String,      default: create,    description: 'Action to execute on SampleJob.'}
 - {name: timeout_minutes,            type: Integer,     optional: true,     description: 'Time in minutes to wait for the SampleJob to reach end'}
 - {name: delete_after_done,          type: Boolean,     optional: true,     description: 'Delete SampleJob after the job is done'}
 - {name: type,                       type: String,                          description: 'Job Type of SampleJob. One of the four types: `sync`, `warmup`, `rmr`, `clear`.'}
@@ -21,6 +23,8 @@ implementation:
       - {inputValue: namespace}
       - --version
       - {inputValue: version}
+      - --action
+      - {inputValue: action}
       - --type
       - {inputValue: type}
       - --sampleSetRef

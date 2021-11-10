@@ -1,5 +1,5 @@
-name: Kubeflow - Serve Model using KFServing
-description: Serve Models using Kubeflow KFServing
+name: ElasticServing
+description: Launcher Paddle Elastic Serving
 inputs:
   - {name: name,                      type: String,                             description: 'PaddleService name.'}
   - {name: namespace,                 type: String,     default: kubeflow,      description: 'The namespace of PaddleService.'}
@@ -21,7 +21,7 @@ outputs:
 implementation:
   container:
     image: xiaolao/paddle-launcher:latest
-    command: [python, /paddle-launcher/launch_serving.py]
+    command: [python, launch_serving.py]
     args:
       - --name
       - {inputValue: name}

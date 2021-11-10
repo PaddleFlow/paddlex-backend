@@ -44,6 +44,9 @@ def main(argv=None):
     parser.add_argument('--version', type=str,
                         default='v1alpha1',
                         help='SampleSet version.')
+    parser.add_argument('--action', type=str,
+                        default='apply',
+                        help='Action to execute on SampleSet.')
     parser.add_argument('--timeoutMinutes', type=int,
                         default=60*24,
                         help='Time in minutes to wait for the SampleSet to be ready.')
@@ -104,12 +107,25 @@ def main(argv=None):
     if args.nodeAffinity:
         inst["spec"]["nodeAffinity"] = args.nodeAffinity
 
-    create_response = sample_set.create(inst)
-    print("create SampleSet have response {}".format(create_response))
+    if args.action == "create":
+        response = sample_set.create(inst)
+    elif args.action == "update":
+        response = sample_set.update(inst)
+    elif args.action == "apply":
+        response = sample_set.apply(inst)
+    elif args.action == "delete":
+        response = sample_set.delete(args.name, args.namespace)
+        print("Delete SampleSet have response {}".format(response))
+        return
+    else:
+        raise Exception("action must be one of create/update/apply/delete")
+
+    print("{} SampleSet have response {}".format(args.action, response))
 
     expected_conditions = ["Ready"]
+    error_phases = ["SyncFailed", "PartialReady"]
     sample_set.wait_for_condition(
-        args.namespace, args.name, expected_conditions,
+        args.namespace, args.name, expected_conditions, error_phases,
         timeout=datetime.timedelta(minutes=args.timeoutMinutes))
 
 

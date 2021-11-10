@@ -1,8 +1,10 @@
+name: PaddleJob
 description: PaddleJob Launcher
 inputs:
 - {name: name,                       type: String,                          description: 'PaddleJob name.'}
 - {name: namespace,                  type: String,      default: kubeflow,  description: 'PaddleJob namespace (likely your current namespace).'}
 - {name: version,                    type: String,      default: v1,        description: 'PaddleJob version.'}
+- {name: action,                     type: String,      default: create,    description: 'Action to execute on PaddleJob.'}
 - {name: timeout_minutes,            type: Integer,     optional: true,     description: 'Time in minutes to wait for the PaddleJob to reach end.'}
 - {name: delete_after_done,          type: Boolean,     optional: true,     description: 'Whether to delete the job after it is finished.'}
 - {name: clean_pod_policy,           type: String,      optional: true,     description: 'Defines whether to clean pod after job finished.'}
@@ -25,6 +27,8 @@ implementation:
       - {inputValue: namespace}
       - --version
       - {inputValue: version}
+      - --action
+      - {inputValue: action}
       - --worker
       - {inputValue: worker_spec}
       - if:

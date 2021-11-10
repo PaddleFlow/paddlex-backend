@@ -1,0 +1,28 @@
+apiVersion: v1
+data:
+  metaurl: <base-64-url-of-redis-to-store-metadata>
+  access-key: bWluaW8=
+  bucket: aHR0cDovL21pbmlvLXNlcnZpY2Uua3ViZWZsb3c6OTAwMC90YXNrLWNlbnRlcg==
+  name: dGFzay1jZW50ZXI=
+  secret-key: bWluaW8xMjM=
+  storage: bWluaW8=
+kind: Secret
+metadata:
+  name: task-center
+  namespace: kubeflow
+type: Opaque
+---
+allowVolumeExpansion: true
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: task-center
+  namespace: kubeflow
+parameters:
+  csi.storage.k8s.io/node-publish-secret-name: task-center
+  csi.storage.k8s.io/node-publish-secret-namespace: kubeflow
+  csi.storage.k8s.io/provisioner-secret-name: task-center
+  csi.storage.k8s.io/provisioner-secret-namespace: kubeflow
+provisioner: csi.juicefs.com
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer

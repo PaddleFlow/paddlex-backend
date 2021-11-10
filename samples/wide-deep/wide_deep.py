@@ -13,11 +13,28 @@ NAMESPACE = "kubeflow"
 SAMPLE_SET_NAME = "criteo"
 SAMPLE_SET_PATH = "/mnt/criteo"
 
-DATA_SOURCE_SECRET = "data-source-secret"
-DATA_CENTER_SECRET = "data-center-secret"
+# data source
+DATA_SOURCE_SECRET_NAME = "data-source"
 
-DATA_SOURCE_URI = "bos://paddleflow-public/criteo/slot_train_data_full/"
-DATA_DESTINATION = "slot_train_data_full/"
+DATA_SOURCE_SECRET = {
+    "apiVersion": "v1",
+    "kind": "Secret",
+    "metadata": {
+        "name": DATA_SOURCE_SECRET_NAME,
+        "namespace": NAMESPACE,
+    },
+    "type": "Opaque",
+    "data": {
+        "name": "ZW1wdHkgc2VjcmV0Cg=="
+    }
+}
+
+#
+
+DATA_CENTER_SECRET_NAME = "data-center"
+
+DATA_SOURCE_URI = "bos://zhouti-mcp-edge/criteo/part-1/"
+DATA_DESTINATION = "criteo/slot_train_data_full/"
 
 
 # config file
@@ -28,6 +45,8 @@ CONFIG_FILE = "wide_deep_config.yaml"
 # model file
 MODEL_CENTER = "/mnt/model-center/"
 MODEL_PATH = "/mnt/model-center/PaddleRec/wide-deep/"
+
+MODEL_CENTER_PATH = "model-center/wide-deep/latest/wide-deep.tar.gz"
 
 # log file
 LOG_PATH = "/mnt/model-center/PaddleRec/wide-deep/log"
@@ -79,7 +98,7 @@ CMD = f"cp {os.path.join(CONFIG_PATH, CONFIG_FILE)} . &&  python -m paddle.distr
 
 
 def create_sample_set():
-    sampleset_launcher_op = components.load_component_from_file("./components/sampleset-component.yaml")
+    sampleset_launcher_op = components.load_component_from_file("../../components/sampleset.yaml")
 
     return sampleset_launcher_op(
         name=SAMPLE_SET_NAME,
@@ -90,7 +109,7 @@ def create_sample_set():
 
 
 def create_sample_job(sample_set_task):
-    samplejob_launcher_op = components.load_component_from_file("./components/samplejob-component.yaml")
+    samplejob_launcher_op = components.load_component_from_file("../../components/samplejob.yaml")
 
     sync_options = {
         "syncOptions": {
@@ -139,7 +158,7 @@ def create_model_config():
 
 
 def create_paddle_job(sample_job_task, model_config_task):
-    paddlejob_launcher_op = components.load_component_from_file("./components/paddlejob-component.yaml")
+    paddlejob_launcher_op = components.load_component_from_file("../../components/paddlejob.yaml")
 
     container = {
         "name": "paddlerec",
@@ -207,7 +226,7 @@ def create_paddle_job(sample_job_task, model_config_task):
             "mountPath": SAMPLE_SET_PATH,
         }
     ).after(sample_job_task, model_config_task
-            ).set_display_name("train wide and deep")
+    ).set_display_name("train wide and deep")
 
 
 @dsl.pipeline(
@@ -215,13 +234,35 @@ def create_paddle_job(sample_job_task, model_config_task):
     description="An example to train wide-deep-deep using paddle.",
 )
 def wide_deep_demo():
+    # 1. create volume
+    vop = dsl.VolumeOp(
+        name="create_pvc_test",
+        resource_name="my-pvc-test",
+        storage_class="config-center",
+        size="10Gi",
+        modes=dsl.VOLUME_MODE_RWM
+    )
 
-    dsl.VolumeOp()
+    # 2. create secret for data source
+    dsl.ResourceOp(
+        name='test-step',
+        k8s_resource=DATA_SOURCE_SECRET,
+        action='create'
+    )
 
+    # 1. create or update SampleSet for Criteo which is stored in remote storage
     sample_set_task = create_sample_set()
+
+    # 2. create configmap for wide-and-deep model
     create_config_task = create_model_config()
+
+    # 2. create SampleJob and wait it finish data synchronization
     sample_job_task = create_sample_job(sample_set_task)
+
+    # 3. create PaddleJob and wait it finish model training
     paddle_job_task = create_paddle_job(sample_job_task, create_config_task)
+
+    # 4. update
 
 
 if __name__ == "__main__":

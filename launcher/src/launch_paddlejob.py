@@ -43,6 +43,9 @@ def main(argv=None):
     parser.add_argument('--version', type=str,
                         default='v1',
                         help='PaddleJob version.')
+    parser.add_argument('--action', type=str,
+                        default='create',
+                        help='Action to execute on PaddleJob.')
     parser.add_argument('--timeoutMinutes', type=int,
                         default=60*24,
                         help='Time in minutes to wait for the PaddleJob to reach end')
@@ -112,13 +115,27 @@ def main(argv=None):
     if args.elastic > 0:
         inst["spec"]["elastic"] = args.elastic
 
-    create_response = pdj.create(inst)
-    print("create PaddleJob have response {}".format(create_response))
+    if args.action == "create":
+        response = pdj.create(inst)
+    elif args.action == "update":
+        response = pdj.update(inst)
+    elif args.action == "apply":
+        response = pdj.apply(inst)
+    elif args.action == "delete":
+        response = pdj.delete(args.name, args.namespace)
+        print("Delete PaddleJob have response {}".format(response))
+        return
+    else:
+        raise Exception("action must be one of create/update/apply/delete")
 
-    expected_conditions = ["Succeed", "Completed", "Failed", "Terminated"]
+    print("{} PaddleJob have response {}".format(args.action, response))
+
+    expected_conditions = ["Succeed", "Completed"]
+    error_phases = ["Failed", "Terminated"]
     pdj.wait_for_condition(
-        args.namespace, args.name, expected_conditions,
+        args.namespace, args.name, expected_conditions, error_phases,
         timeout=datetime.timedelta(minutes=args.timeoutMinutes))
+
     if args.deleteAfterDone:
         pdj.delete(args.name, args.namespace)
 

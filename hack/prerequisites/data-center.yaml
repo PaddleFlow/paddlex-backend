@@ -1,0 +1,13 @@
+apiVersion: v1
+data:
+  metaurl: <base-64-url-of-redis-to-store-metadata>
+  access-key: bWluaW8=
+  bucket: aHR0cDovL21pbmlvLXNlcnZpY2Uua3ViZWZsb3c6OTAwMC9kYXRhLWNlbnRlcg==
+  name: ZGF0YS1jZW50ZXI=
+  secret-key: bWluaW8xMjM=
+  storage: bWluaW8=
+kind: Secret
+metadata:
+  name: data-center
+  namespace: kubeflow
+type: Opaque

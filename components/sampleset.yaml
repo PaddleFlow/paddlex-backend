@@ -1,8 +1,10 @@
+name: SampleSet
 description: SampleSet Launcher
 inputs:
 - {name: name,                       type: String,                          description: 'SampleSet name.'}
 - {name: namespace,                  type: String,      default: kubeflow,  description: 'SampleSet namespace.'}
 - {name: version,                    type: String,      default: v1alpha1,  description: 'SampleSet version.'}
+- {name: action,                     type: String,      default: apply,     description: 'Action to execute on SampleJob.'}
 - {name: timeout_minutes,            type: Integer,     optional: true,     description: 'Time in minutes to wait for the SampleSet to be ready.'}
 - {name: partitions,                 type: Integer,     default: 1,         description: 'Partitions is the number of SampleSet partitions, partition means cache node.'}
 - {name: source,                     type: JsonObject,  optional: true,     description: 'Source describes the information of data source uri and secret name.'}
@@ -22,6 +24,8 @@ implementation:
       - {inputValue: namespace}
       - --version
       - {inputValue: version}
+      - --action
+      - {inputValue: action}
       - --partitions
       - {inputValue: partitions}
       - --noSync

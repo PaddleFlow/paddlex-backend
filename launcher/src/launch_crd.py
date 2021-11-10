@@ -12,9 +12,7 @@
 # limitations under the License.
 
 import datetime
-import json
 import logging
-import multiprocessing
 import time
 
 from kubernetes import client as k8s_client
@@ -100,64 +98,62 @@ class K8sCR(object):
           Args:
             spec: The spec for the CR
         """
-        try:
-            name = spec["metadata"]["name"]
-            namespace = spec["metadata"].get("namespace", "default")
-            logger.info("Updating %s/%s %s in namespace %s.",
-                        self.group, self.plural, name, namespace)
-            api_response = self.client.patch_namespaced_custom_object(
-              self.group, self.version, namespace, self.plural, name, spec)
-            logger.info("Updated %s/%s %s in namespace %s.",
-                        self.group, self.plural, name, namespace)
-            return api_response
-        except rest.ApiException as e:
-            self._log_and_raise_exception(e, "update")
+        name = spec["metadata"]["name"]
+        namespace = spec["metadata"].get("namespace", "default")
+        logger.info("Updating %s/%s %s in namespace %s.",
+                    self.group, self.plural, name, namespace)
+        api_response = self.client.patch_namespaced_custom_object(
+          self.group, self.version, namespace, self.plural, name, spec)
+        logger.info("Updated %s/%s %s in namespace %s.",
+                    self.group, self.plural, name, namespace)
+        return api_response
 
     def create(self, spec):
         """Create a CR.
         Args:
           spec: The spec for the CR.
         """
+        # Create a Resource
+        namespace = spec["metadata"].get("namespace", "default")
+        logger.info("Creating %s/%s %s in namespace %s.",
+                    self.group, self.plural, spec["metadata"]["name"], namespace)
+        api_response = self.client.create_namespaced_custom_object(
+            self.group, self.version, namespace, self.plural, spec)
+        logger.info("Created %s/%s %s in namespace %s.",
+                    self.group, self.plural, spec["metadata"]["name"], namespace)
+        return api_response
+
+    def apply(self, spec):
+        """Create or update a CR
+        Args:
+          spec: The spec for the CR.
+        """
+        name = spec["metadata"]["name"]
+        namespace = spec["metadata"].get("namespace", "default")
+        logger.info("Apply %s/%s %s in namespace %s.",
+                    self.group, self.plural, name, namespace)
+
         try:
-            # Create a Resource
-            namespace = spec["metadata"].get("namespace", "default")
-            logger.info("Creating %s/%s %s in namespace %s.",
-                        self.group, self.plural, spec["metadata"]["name"], namespace)
             api_response = self.client.create_namespaced_custom_object(
                 self.group, self.version, namespace, self.plural, spec)
-            logger.info("Created %s/%s %s in namespace %s.",
-                        self.group, self.plural, spec["metadata"]["name"], namespace)
             return api_response
-        except rest.ApiException as e:
-            self._log_and_raise_exception(e, "create")
-
-    def delete(self, name, namespace):
-        try:
-            logger.info("Deleteing %s/%s %s in namespace %s.",
-                        self.group, self.plural, name, namespace)
-
-            api_response = self.client.delete_namespaced_custom_object(
-                self.group, self.version, namespace, self.plural,
-                name, propagation_policy="Foreground")
-
-            logger.info("Deleted %s/%s %s in namespace %s.",
-                        self.group, self.plural, name, namespace)
-
-            return api_response
-        except rest.ApiException as e:
-            self._log_and_raise_exception(e, "delete")
-
-    def _log_and_raise_exception(self, ex, action):
-        message = ""
-        if ex.message:
-            message = ex.message
-        if ex.body:
-            try:
-                body = json.loads(ex.body)
-                message = body.get("message")
-            except ValueError:
-                logger.error("Exception when %s %s/%s: %s", action, self.group, self.plural, ex.body)
+        except rest.ApiException as err:
+            if str(err.status) != "409":
                 raise
 
-        logger.error("Exception when %s %s/%s: %s", action, self.group, self.plural, ex.body)
-        raise ex
+        logger.info("Already exists now begin updating")
+        api_response = self.client.patch_namespaced_custom_object(
+            self.group, self.version, namespace, self.plural, name, spec)
+        logger.info("Applied %s/%s %s in namespace %s.",
+                    self.group, self.plural, name, namespace)
+        return api_response
+
+    def delete(self, name, namespace):
+        logger.info("Deleting %s/%s %s in namespace %s.",
+                    self.group, self.plural, name, namespace)
+        api_response = self.client.delete_namespaced_custom_object(
+            self.group, self.version, namespace, self.plural,
+            name, propagation_policy="Foreground")
+        logger.info("Deleted %s/%s %s in namespace %s.",
+                    self.group, self.plural, name, namespace)
+        return api_response
