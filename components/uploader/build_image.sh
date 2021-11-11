@@ -1,6 +1,6 @@
 #!/bin/bash
 
-IMAGE_NAME=xiaolao/paddle-launcher:latest
+IMAGE_NAME=xiaolao/model-uploader:latest
 
 echo "Building image $IMAGE_NAME"
 docker build -t ${IMAGE_NAME} .

@@ -3,8 +3,9 @@ import os
 import kfp
 import kfp.dsl as dsl
 from kfp import components
+from kfp.onprem import use_k8s_secret
 
-from kubernetes.client.models import V1Volume, V1VolumeMount
+# from kubernetes.client.models import V1Volume, V1VolumeMount, V1EnvFromSource, V1SecretEnvSource
 
 NAMESPACE = "kubeflow"
 
@@ -12,6 +13,7 @@ NAMESPACE = "kubeflow"
 MODEL_NAME = "wide-deep"
 MODEL_VERSION = "latest"
 MODEL_FILE = "wide-deep.tar.gz"
+TRAIN_EPOCH = 4
 
 # SampleSet
 SAMPLE_SET_NAME = "criteo"
@@ -20,20 +22,15 @@ SAMPLE_SET_PATH = "/mnt/criteo"
 # data source and storage
 DATA_SOURCE_SECRET_NAME = "data-source"
 DATA_CENTER_SECRET_NAME = "data-center"
-DATA_SOURCE_URI = "bos://paddleflow-public/criteo/demo/"
-DATA_DESTINATION = "criteo/slot_train_data_full/"
+DATA_SOURCE_URI = "bos://paddleflow-public.hkg.bcebos.com/criteo/demo/"
 
 # config file and path
 CONFIG_PATH = "/mnt/config/"
 CONFIG_FILE = "wide_deep_config.yaml"
 
-# model file
-# MODEL_CENTER = "/mnt/model-center/"
-MODEL_PATH = "/mnt/model-center/PaddleRec/wide-deep/"
-
 # PaddleJob
 TASK_MOUNT_PATH = "/mnt/task-center/"
-FLEET_LOG_PATH = "/mnt/task-center/logs/"
+MODEL_CHECKPOINT_PATH = "/mnt/task-center/models/"
 
 PADDLE_JOB_IMAGE = "registry.baidubce.com/paddleflow-public/paddlerec:2.1.0-gpu-cuda10.2-cudnn7"
 
@@ -56,7 +53,7 @@ def create_sample_job():
     sync_options = {
         "syncOptions": {
             "source": DATA_SOURCE_URI,
-            "destination": DATA_DESTINATION,
+            "destination": SAMPLE_SET_NAME,
         }
     }
     return samplejob_launcher_op(
@@ -78,24 +75,26 @@ def write_config_file(path: str, filename: str, content: str):
     with open(filepath, "w") as f:
         f.write(content)
 
+    print("write config success: \n\n {}".format(content))
+
 
 def create_model_config(volume_op):
     wide_deep_config = f"""
 # wide_deep_config.yaml
 # global settings
 runner:
-  train_data_dir: "{SAMPLE_SET_PATH}/{DATA_DESTINATION}"
+  train_data_dir: "{SAMPLE_SET_PATH}/{SAMPLE_SET_NAME}/slot_train_data_full/"
   train_reader_path: "criteo_reader" # importlib format
   use_gpu: True
   use_auc: True
   train_batch_size: 4096
-  epochs: 4
+  epochs: {TRAIN_EPOCH}
   print_interval: 10
-  model_save_path: {MODEL_PATH}
-  test_data_dir: "/mnt/{SAMPLE_SET_NAME}/slot_test_data_full"
+  model_save_path: {MODEL_CHECKPOINT_PATH}
+  test_data_dir: "{SAMPLE_SET_PATH}/{SAMPLE_SET_NAME}/slot_test_data_full"
   infer_reader_path: "criteo_reader" # importlib format
   infer_batch_size: 4096
-  infer_load_path: {MODEL_PATH}
+  infer_load_path: {MODEL_CHECKPOINT_PATH}
   infer_start_epoch: 0
   infer_end_epoch: 4
   use_inference: True
@@ -126,7 +125,7 @@ hyper_parameters:
     )
     task_op = create_config(CONFIG_PATH, CONFIG_FILE, wide_deep_config)
     task_op.add_pvolumes({CONFIG_PATH: volume_op.volume})
-    task_op.set_display_name("train wide and deep")
+    task_op.set_display_name("create config file")
 
     return task_op
 
@@ -134,7 +133,7 @@ hyper_parameters:
 def create_paddle_job(volume_op):
     paddlejob_launcher_op = components.load_component_from_file("../../components/paddlejob.yaml")
     args = f"cp {os.path.join(TASK_MOUNT_PATH, CONFIG_FILE)} . &&  " \
-           f"python -m paddle.distributed.launch --log_dir {FLEET_LOG_PATH} ../../../tools/trainer.py -m {CONFIG_FILE}"
+           f"python -m paddle.distributed.launch --log_dir {TASK_MOUNT_PATH} ../../../tools/trainer.py -m {CONFIG_FILE}"
 
     container = {
         "name": "paddlerec",
@@ -151,7 +150,7 @@ def create_paddle_job(volume_op):
             },
             {
                 "name": "task-volume",
-                "mountPath": volume_op.volume.name,
+                "mountPath": TASK_MOUNT_PATH,
             }
         ],
         "resources": {
@@ -175,7 +174,7 @@ def create_paddle_job(volume_op):
                 {
                     "name": "task-volume",
                     "persistentVolumeClaim": {
-                        "claimName": "model-center"
+                        "claimName": volume_op.volume.persistent_volume_claim.claim_name
                     }
                 }
             ]},
@@ -205,7 +204,8 @@ def create_volume_op():
         storage_class="task-center",
         size="10Gi",
         modes=dsl.VOLUME_MODE_RWM
-    ).set_display_name("create pvc and pv for PaddleJob")
+    ).set_display_name("create pvc and pv for PaddleJob"
+    ).add_pod_annotation(name="pipelines.kubeflow.org/max_cache_staleness", value="P0D")
 
 
 def create_resource_op():
@@ -226,24 +226,30 @@ def create_resource_op():
         name="Data Source Secret",
         action='apply',
         k8s_resource=data_source_secret,
-    ).set_display_name("create data source secret for SampleJob")
+    ).set_display_name("create data source secret for SampleJob"
+    ).add_pod_annotation(name="pipelines.kubeflow.org/max_cache_staleness", value="P0D")
 
 
 def create_upload_op(volume_op):
     uploader = components.load_component_from_file("../../components/uploader.yaml")
-    uploader_op = uploader(model_name=MODEL_NAME, version=MODEL_VERSION, filename=MODEL_FILE)
+    uploader_op = uploader(
+        endpoint="http://minio-service.kubeflow:9000",
+        target_path=f"{MODEL_CHECKPOINT_PATH}{TRAIN_EPOCH-1}/",
+        model_name=MODEL_NAME,
+        version=MODEL_VERSION)
 
-    uploader_op.add_volume(V1Volume(
-        name="config-center",
-        persistent_volume_claim={
-            "claimName": "config-center"
-        }
-    ))
-
-    uploader_op.add_volume_mount(
-
+    uploader_op.add_pvolumes({TASK_MOUNT_PATH: volume_op.volume})
+    uploader_op.apply(
+        use_k8s_secret(
+            secret_name=DATA_CENTER_SECRET_NAME,
+            k8s_secret_key_to_env={
+                "secret-key": "MINIO_SECRET_KEY",
+                "access-key": "MINIO_ACCESS_KEY",
+            },
+        )
     )
-    uploader_op.set_display_name("train wide and deep")
+    uploader_op.set_display_name("upload model to model-center")
+
     return uploader_op
 
 
@@ -264,23 +270,31 @@ def wide_deep_demo():
 
     # 2. create or update SampleSet for Criteo which is stored in remote storage
     sample_set_task = create_sample_set()
+    sample_set_task.execution_options.caching_strategy.max_cache_staleness = "P0D"
 
     # 2. create configmap for wide-and-deep model
     create_config_task = create_model_config(volume_op)
     create_config_task.after(volume_op)
+    create_config_task.execution_options.caching_strategy.max_cache_staleness = "P0D"
 
     # 3. create SampleJob and wait it finish data synchronization
     sample_job_task = create_sample_job()
     sample_job_task.after(secret_op, sample_set_task)
+    sample_job_task.execution_options.caching_strategy.max_cache_staleness = "P0D"
 
     # 4. create PaddleJob and wait it finish model training
     paddle_job_task = create_paddle_job(volume_op)
     paddle_job_task.after(create_config_task, sample_job_task)
+    paddle_job_task.execution_options.caching_strategy.max_cache_staleness = "P0D"
 
-    # # 5. pack and compress model file then upload it to model-center
-    # upload_op = create_upload_op(volume_op)
-    #
-    # # 6. download model file and deploy PaddleServing
+    # 5. pack and compress model file then upload it to model-center
+    upload_op = create_upload_op(volume_op)
+    upload_op.after(paddle_job_task)
+    upload_op.execution_options.caching_strategy.max_cache_staleness = "P0D"
+
+    # volume_op.delete()
+
+    # 6. download model file and deploy PaddleServing
 
 
 if __name__ == "__main__":

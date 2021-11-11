@@ -1,11 +1,4 @@
-FROM minio/mc:latest
+FROM alpine
 
-#COPY requirements.txt .
-
-RUN
-
-#ADD ./src /paddle-launcher
-#
-#WORKDIR /paddle-launcher
-#
-#ENTRYPOINT ["python", "launch_paddlejob.py"]
+RUN wget https://dl.min.io/client/mc/release/linux-amd64/mc && \
+    chmod +x mc && mv mc /usr/local/bin/

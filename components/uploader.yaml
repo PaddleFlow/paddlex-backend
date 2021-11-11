@@ -1,37 +1,49 @@
 name: Modle Uploader
 description: Upload model to model-center bucket of minio
 inputs:
-  - {name: model_name, description: 'Minio Bucket name'}
-  - {name: version, description: 'Minio folder name to upload the files'}
-  - {name: filename, description: 'Input file/folder name'}
+  - {name: endpoint,    description: 'Endpoint of minio server'}
+  - {name: target_path, description: 'The target path need to tar and upload'}
+  - {name: model_name,  description: 'Minio Bucket name'}
+  - {name: version,     description: 'Minio folder name to upload the files'}
 
 implementation:
   container:
     image: xiaolao/model-uploader:latest
     command:
-    - bash
+    - sh
     - -exc
     - |
-      model_path=$0
-      handler_path=$1
+      endpoint=$0
+      target_path=$1
       model_name=$2
-      model_version=$3
-      output_model_archive_path=$4
+      version=$3
 
-      mkdir -p "$(dirname "$output_model_archive_path")"
+      if [[ $target_path != */ ]]; then
+        target_path="${target_path}/"
+      fi
 
-      # torch-model-archiver needs the handler to have .py extension
-      cp "$handler_path" handler.py
-      torch-model-archiver --model-name "$model_name" --version "$model_version" --serialized-file "$model_path" --handler handler.py
+      if [ ! -d "$target_path" ]; then
+        echo "Target path $target_path not exist"
+        exit 1
+      fi
 
-      # torch-model-archiver does not allow specifying the output path, but always writes to "${model_name}.<format>"
-      expected_model_archive_path="${model_name}.mar"
-      mv "$expected_model_archive_path" "$output_model_archive_path"
+      model_file="${model_name}.tar.gz"
 
+      # compress model files
+      tar czf ${model_file} ${target_path}
+
+      # MINIO_ACCESS_ID and MINIO_SECRET_KEY is from environment variable
+      mc config host add minio ${endpoint} ${MINIO_ACCESS_KEY} ${MINIO_SECRET_KEY} --api s3v4
+
+      # make bucket of model-center
+      mc mb --ignore-existing minio/model-center
+
+      # upload model file to model-center bucket of minio
+      mc cp $model_file minio/model-center/${model_name}/${version}/${model_file}
+
+      echo "upload model to minio/model-center/${model_name}/${version}/${model_file} ."
     args:
-      - --model_name
+      - {inputValue: endpoint}
+      - {inputValue: target_path}
       - {inputValue: model_name}
-      - --version
       - {inputValue: version}
-      - --filename
-      - {inputPath: filename}
