@@ -129,8 +129,8 @@ def main(argv=None):
     serving = PaddleServing(version=args.version, client=api_client)
     if args.action == "create":
         response = serving.create(inst)
-    elif args.action == "update":
-        response = serving.update(inst)
+    elif args.action == "patch":
+        response = serving.patch(inst)
     elif args.action == "apply":
         response = serving.apply(inst)
     elif args.action == "delete":

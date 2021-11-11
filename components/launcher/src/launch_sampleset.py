@@ -109,8 +109,8 @@ def main(argv=None):
 
     if args.action == "create":
         response = sample_set.create(inst)
-    elif args.action == "update":
-        response = sample_set.update(inst)
+    elif args.action == "patch":
+        response = sample_set.patch(inst)
     elif args.action == "apply":
         response = sample_set.apply(inst)
     elif args.action == "delete":
@@ -118,7 +118,7 @@ def main(argv=None):
         print("Delete SampleSet have response {}".format(response))
         return
     else:
-        raise Exception("action must be one of create/update/apply/delete")
+        raise Exception("action must be one of create/patch/apply/delete")
 
     print("{} SampleSet have response {}".format(args.action, response))
 

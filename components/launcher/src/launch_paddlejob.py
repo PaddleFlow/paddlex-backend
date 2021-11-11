@@ -117,8 +117,8 @@ def main(argv=None):
 
     if args.action == "create":
         response = pdj.create(inst)
-    elif args.action == "update":
-        response = pdj.update(inst)
+    elif args.action == "patch":
+        response = pdj.patch(inst)
     elif args.action == "apply":
         response = pdj.apply(inst)
     elif args.action == "delete":
@@ -126,7 +126,7 @@ def main(argv=None):
         print("Delete PaddleJob have response {}".format(response))
         return
     else:
-        raise Exception("action must be one of create/update/apply/delete")
+        raise Exception("action must be one of create/patch/apply/delete")
 
     print("{} PaddleJob have response {}".format(args.action, response))
 

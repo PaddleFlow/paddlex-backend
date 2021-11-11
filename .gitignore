@@ -3,6 +3,7 @@
 .ijwb/
 *.iml
 *.swp
+*.DS_Store
 
 # python sdk package
 *.tar.gz

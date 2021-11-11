@@ -1,5 +1,5 @@
 name: Modle Uploader
-description: Convert model format and upload it to model-center
+description: Upload model to model-center bucket of minio
 inputs:
   - {name: model_name, description: 'Minio Bucket name'}
   - {name: version, description: 'Minio folder name to upload the files'}

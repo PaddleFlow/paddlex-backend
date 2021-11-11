@@ -93,18 +93,18 @@ class K8sCR(object):
         else:
             return False, conditions[-1]["type"]
 
-    def update(self, spec):
+    def patch(self, spec):
         """Apply custom resource
           Args:
             spec: The spec for the CR
         """
         name = spec["metadata"]["name"]
         namespace = spec["metadata"].get("namespace", "default")
-        logger.info("Updating %s/%s %s in namespace %s.",
+        logger.info("Patching %s/%s %s in namespace %s.",
                     self.group, self.plural, name, namespace)
         api_response = self.client.patch_namespaced_custom_object(
           self.group, self.version, namespace, self.plural, name, spec)
-        logger.info("Updated %s/%s %s in namespace %s.",
+        logger.info("Patched %s/%s %s in namespace %s.",
                     self.group, self.plural, name, namespace)
         return api_response
 

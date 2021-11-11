@@ -102,8 +102,8 @@ def main(argv=None):
 
     if args.action == "create":
         response = sample_job.create(inst)
-    elif args.action == "update":
-        response = sample_job.update(inst)
+    elif args.action == "patch":
+        response = sample_job.patch(inst)
     elif args.action == "apply":
         response = sample_job.apply(inst)
     elif args.action == "delete":
@@ -111,7 +111,7 @@ def main(argv=None):
         print("Delete SampleJob have response {}".format(response))
         return
     else:
-        raise Exception("action must be one of create/update/apply/delete")
+        raise Exception("action must be one of create/patch/apply/delete")
 
     print("{} SampleJob have response {}".format(args.action, response))
 
