@@ -5,8 +5,6 @@ import kfp.dsl as dsl
 from kfp import components
 from kfp.onprem import use_k8s_secret
 
-# from kubernetes.client.models import V1Volume, V1VolumeMount, V1EnvFromSource, V1SecretEnvSource
-
 NAMESPACE = "kubeflow"
 
 # model name and file
@@ -31,6 +29,9 @@ CONFIG_FILE = "wide_deep_config.yaml"
 # PaddleJob
 TASK_MOUNT_PATH = "/mnt/task-center/"
 MODEL_CHECKPOINT_PATH = "/mnt/task-center/models/"
+
+# minio host
+MINIO_ENDPOINT = "http://minio-service.kubeflow:9000"
 
 PADDLE_JOB_IMAGE = "registry.baidubce.com/paddleflow-public/paddlerec:2.1.0-gpu-cuda10.2-cudnn7"
 
@@ -193,10 +194,6 @@ def create_paddle_job(volume_op):
     ).set_display_name("train wide and deep")
 
 
-def create_uploader_op():
-    pass
-
-
 def create_volume_op():
     return dsl.VolumeOp(
         name="Wide Deep PVC",
@@ -233,10 +230,12 @@ def create_resource_op():
 def create_upload_op(volume_op):
     uploader = components.load_component_from_file("../../components/uploader.yaml")
     uploader_op = uploader(
-        endpoint="http://minio-service.kubeflow:9000",
+        endpoint=MINIO_ENDPOINT,
         target_path=f"{MODEL_CHECKPOINT_PATH}{TRAIN_EPOCH-1}/",
         model_name=MODEL_NAME,
-        version=MODEL_VERSION)
+        version=MODEL_VERSION,
+        mount_path=TASK_MOUNT_PATH,
+    )
 
     uploader_op.add_pvolumes({TASK_MOUNT_PATH: volume_op.volume})
     uploader_op.apply(
@@ -255,6 +254,29 @@ def create_upload_op(volume_op):
 
 def create_serving_op():
     create_serving = components.load_component_from_file("../../components/serving.yaml")
+
+    args = f"wget {MINIO_ENDPOINT}/model-center/{MODEL_NAME}/{MODEL_VERSION}/{MODEL_NAME}.tar.gz && " \
+           f"tar xzf {MODEL_NAME}.tar.gz && rm -rf {MODEL_NAME}.tar.gz && " \
+           f"python3 -m paddle_serving_client.convert --dirname {MODEL_NAME}/ --model_filename rec_inference.pdmodel --params_filename rec_inference.pdiparams && " \
+           f"python3 -m paddle_serving_server.serve --model serving_server --port 9292"
+
+    default = {
+        "arg": args,
+        "port": 9292,
+        "tag": "v0.6.2",
+        "containerImage": "registry.baidubce.com/paddleflow-public/serving",
+    }
+
+    serving_op = create_serving(
+        name="wide-deep-serving",
+        namespace="paddleservice-system",
+        action="apply",
+        default=default,
+        runtime_version="paddleserving",
+        service={"minScale": 1}
+    )
+    serving_op.set_display_name("deploy wide-deep serving")
+    return serving_op
 
 
 @dsl.pipeline(
@@ -291,10 +313,12 @@ def wide_deep_demo():
     upload_op = create_upload_op(volume_op)
     upload_op.after(paddle_job_task)
     upload_op.execution_options.caching_strategy.max_cache_staleness = "P0D"
-
-    # volume_op.delete()
+    volume_op.delete()
 
     # 6. download model file and deploy PaddleServing
+    serving_op = create_serving_op()
+    serving_op.after(upload_op)
+    serving_op.execution_options.caching_strategy.max_cache_staleness = "P0D"
 
 
 if __name__ == "__main__":
