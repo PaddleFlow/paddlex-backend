@@ -33,7 +33,9 @@ MODEL_CHECKPOINT_PATH = "/mnt/task-center/models/"
 # minio host
 MINIO_ENDPOINT = "http://minio-service.kubeflow:9000"
 
+# images
 PADDLE_JOB_IMAGE = "registry.baidubce.com/paddleflow-public/paddlerec:2.1.0-gpu-cuda10.2-cudnn7"
+SERVING_IMAGE = "registry.baidubce.com/paddleflow-public/serving"
 
 
 def create_sample_set():
@@ -134,7 +136,7 @@ hyper_parameters:
 def create_paddle_job(volume_op):
     paddlejob_launcher_op = components.load_component_from_file("../../components/paddlejob.yaml")
     args = f"cp {os.path.join(TASK_MOUNT_PATH, CONFIG_FILE)} . &&  " \
-           f"python -m paddle.distributed.launch --log_dir {TASK_MOUNT_PATH} ../../../tools/trainer.py -m {CONFIG_FILE}"
+           f"python -m paddle.distributed.launch --log_dir {TASK_MOUNT_PATH} ../../../tools/static_trainer.py -m {CONFIG_FILE}"
 
     container = {
         "name": "paddlerec",
@@ -227,14 +229,31 @@ def create_resource_op():
     ).add_pod_annotation(name="pipelines.kubeflow.org/max_cache_staleness", value="P0D")
 
 
+def create_convert_op(volume_op):
+    args = f"cd {TASK_MOUNT_PATH} && mkdir -p {MODEL_NAME} && " \
+           f"python3 -m paddle_serving_client.convert --dirname {MODEL_CHECKPOINT_PATH}{TRAIN_EPOCH-1}/ " \
+           f"--model_filename rec_inference.pdmodel --params_filename rec_inference.pdiparams " \
+           f"--serving_server ./{MODEL_NAME}/server/ --serving_client ./{MODEL_NAME}/client/ &&" \
+           f"tar czf {MODEL_NAME}.tar.gz {MODEL_NAME}/"
+
+    convert_op = dsl.ContainerOp(
+        name="Convert wide&Deep Model",
+        image=f"{SERVING_IMAGE}:v0.6.2",
+        command="/bin/bash",
+        arguments=["-c", args],
+    )
+    convert_op.add_pvolumes({TASK_MOUNT_PATH: volume_op.volume})
+    convert_op.set_display_name("Convert Model Format")
+    return convert_op
+
+
 def create_upload_op(volume_op):
     uploader = components.load_component_from_file("../../components/uploader.yaml")
     uploader_op = uploader(
         endpoint=MINIO_ENDPOINT,
-        target_path=f"{MODEL_CHECKPOINT_PATH}{TRAIN_EPOCH-1}/",
+        model_file=f"{TASK_MOUNT_PATH}{MODEL_NAME}.tar.gz",
         model_name=MODEL_NAME,
-        version=MODEL_VERSION,
-        mount_path=TASK_MOUNT_PATH,
+        version=MODEL_VERSION
     )
 
     uploader_op.add_pvolumes({TASK_MOUNT_PATH: volume_op.volume})
@@ -257,19 +276,18 @@ def create_serving_op():
 
     args = f"wget {MINIO_ENDPOINT}/model-center/{MODEL_NAME}/{MODEL_VERSION}/{MODEL_NAME}.tar.gz && " \
            f"tar xzf {MODEL_NAME}.tar.gz && rm -rf {MODEL_NAME}.tar.gz && " \
-           f"python3 -m paddle_serving_client.convert --dirname {MODEL_NAME}/ --model_filename rec_inference.pdmodel --params_filename rec_inference.pdiparams && " \
-           f"python3 -m paddle_serving_server.serve --model serving_server --port 9292"
+           f"python3 -m paddle_serving_server.serve --model {MODEL_NAME}/server --port 9292"
 
     default = {
         "arg": args,
         "port": 9292,
         "tag": "v0.6.2",
-        "containerImage": "registry.baidubce.com/paddleflow-public/serving",
+        "containerImage": SERVING_IMAGE,
     }
 
     serving_op = create_serving(
         name="wide-deep-serving",
-        namespace="paddleservice-system",
+        namespace="kubeflow",
         action="apply",
         default=default,
         runtime_version="paddleserving",
@@ -309,16 +327,23 @@ def wide_deep_demo():
     paddle_job_task.after(create_config_task, sample_job_task)
     paddle_job_task.execution_options.caching_strategy.max_cache_staleness = "P0D"
 
-    # 5. pack and compress model file then upload it to model-center
-    upload_op = create_upload_op(volume_op)
-    upload_op.after(paddle_job_task)
-    upload_op.execution_options.caching_strategy.max_cache_staleness = "P0D"
-    volume_op.delete()
+    # 5. convert model format and generate client/server proto file
+    convert_op = create_convert_op(volume_op)
+    convert_op.after(paddle_job_task)
+    convert_op.execution_options.caching_strategy.max_cache_staleness = "P0D"
 
-    # 6. download model file and deploy PaddleServing
+    # 6. pack and compress model file then upload it to model-center
+    upload_op = create_upload_op(volume_op)
+    upload_op.after(convert_op)
+    upload_op.execution_options.caching_strategy.max_cache_staleness = "P0D"
+    # volume_op.delete()
+
+    # 7. download model file and deploy PaddleServing
     serving_op = create_serving_op()
     serving_op.after(upload_op)
     serving_op.execution_options.caching_strategy.max_cache_staleness = "P0D"
+
+    # 8. get predict ctr from wide & deep model server
 
 
 if __name__ == "__main__":
@@ -333,6 +358,6 @@ if __name__ == "__main__":
         pipeline_file,
         arguments={},
         run_name="paddle wide-and-deep demo",
-        service_account="paddle-operator"
+        service_account="pipeline-runner"
     )
     print(f"Created run {run}")

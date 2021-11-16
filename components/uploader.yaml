@@ -2,10 +2,9 @@ name: Modle Uploader
 description: Upload model to model-center bucket of minio
 inputs:
   - {name: endpoint,    description: 'Endpoint of minio server'}
-  - {name: target_path, description: 'The target path need to tar and upload'}
+  - {name: model_file,  description: 'The model file need to upload'}
   - {name: model_name,  description: 'Minio Bucket name'}
   - {name: version,     description: 'Minio folder name to upload the files'}
-  - {name: mount_path,  description: 'The mount path of volume'}
 
 implementation:
   container:
@@ -15,39 +14,9 @@ implementation:
     - -exc
     - |
       endpoint=$0
-      target_path=$1
+      model_file=$1
       model_name=$2
       version=$3
-      mount_path=$4
-
-      if [[ $target_path != */ ]]; then
-        target_path="${target_path}/"
-      fi
-
-      if [ ! -d "$target_path" ]; then
-        echo "Target path $target_path not exist"
-        exit 1
-      fi
-
-      if [[ $mount_path != */ ]]; then
-        mount_path="${mount_path}/"
-      fi
-
-      if [ ! -d "$mount_path" ]; then
-        echo "Mount path $mount_path not exist"
-        exit 1
-      fi
-
-      model_file="${model_name}.tar.gz"
-
-      # change dir to mount path
-      cd ${mount_path}
-
-      # mv target dir as model_name
-      mv ${target_path} ${model_name}
-
-      # compress model files
-      tar czf ${model_file} ${model_name}
 
       # MINIO_ACCESS_ID and MINIO_SECRET_KEY is from environment variable
       mc config host add minio ${endpoint} ${MINIO_ACCESS_KEY} ${MINIO_SECRET_KEY} --api s3v4
@@ -59,12 +28,11 @@ implementation:
       mc policy set download minio/model-center/
 
       # upload model file to model-center bucket of minio
-      mc cp $model_file minio/model-center/${model_name}/${version}/${model_file}
+      mc cp $model_file minio/model-center/${model_name}/${version}/
 
-      echo "upload model to minio/model-center/${model_name}/${version}/${model_file} ."
+      echo "upload model to minio/model-center/${model_name}/${version}/"
     args:
       - {inputValue: endpoint}
-      - {inputValue: target_path}
+      - {inputValue: model_file}
       - {inputValue: model_name}
       - {inputValue: version}
-      - {inputValue: mount_path}

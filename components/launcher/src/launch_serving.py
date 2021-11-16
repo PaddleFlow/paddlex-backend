@@ -145,7 +145,7 @@ def main(argv=None):
     kservice = KnativeService(client=api_client)
     expected_conditions = ["RoutesReady", "Ready"]
     kservice.wait_for_condition(
-        args.namespace, args.name, expected_conditions,
+        args.namespace, args.name, expected_conditions, wait_created=True,
         timeout=datetime.timedelta(minutes=args.timeoutMinutes))
 
     if args.outputPath:

@@ -31,11 +31,12 @@ class K8sCR(object):
     def wait_for_condition(self,
                            namespace,
                            name,
-                           expected_conditions=[],
-                           error_phases=[],
+                           expected_conditions=None,
+                           error_phases=None,
                            timeout=datetime.timedelta(days=365),
                            polling_interval=datetime.timedelta(seconds=30),
-                           status_callback=None):
+                           status_callback=None,
+                           wait_created=False):
         """Waits until any of the specified conditions occur.
             Args:
               namespace: namespace for the CR.
@@ -48,15 +49,26 @@ class K8sCR(object):
               polling_interval: How often to poll for the status of the CR.
               status_callback: (Optional): Callable. If supplied this callable is
                 invoked after we poll the CR. Callable takes a single argument which is the CR.
+              wait_created: wait until the object has been created.
         """
+        if expected_conditions is None:
+            expected_conditions = []
+        if error_phases is None:
+            error_phases = []
         end_time = datetime.datetime.now() + timeout
         while True:
             try:
                 results = self.client.get_namespaced_custom_object(
                     self.group, self.version, namespace, self.plural, name)
-            except Exception as e:
+            except rest.ApiException as err:
+                if str(err.status) == "404" and wait_created:
+                    print("Waiting for for %s/%s %s in namespace %s been created",
+                          self.group, self.plural, name, namespace)
+                    time.sleep(polling_interval.seconds)
+                    continue
+
                 logger.error("There was a problem waiting for %s/%s %s in namespace %s; Exception: %s",
-                             self.group, self.plural, name, namespace, e)
+                             self.group, self.plural, name, namespace, err)
                 raise
 
             if results:
