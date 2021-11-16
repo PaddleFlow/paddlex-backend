@@ -1,0 +1,84 @@
+name: ElasticServing
+description: Launcher Paddle Elastic Serving
+inputs:
+  - {name: name,                      type: String,                             description: 'PaddleService name.'}
+  - {name: namespace,                 type: String,     default: kubeflow,      description: 'The namespace of PaddleService.'}
+  - {name: version,                   type: String,     default: v1,            description: 'PaddleService version.'}
+  - {name: Timeout Minutes,           type: Integer,    optional: true,         description: 'Time in minutes to wait for the PaddleService to be ready.'}
+  - {name: Action,                    type: String,     default: create,        description: 'Action to execute on ElasticServing.'}
+  - {name: Runtime Version,           type: String,     default: paddleserving, description: 'Version of the service.'}
+  - {name: Resources,                 type: JsonObject, optional: true,         description: 'Defaults to requests and limits of 1CPU, 2Gb MEM.'}
+  - {name: Default,                   type: JsonObject,                         description: 'DefaultTag defines default PaddleService endpoints.'}
+  - {name: Canary,                    type: JsonObject, optional: true,         description: 'CanaryTag defines an alternative PaddleService endpoints.'}
+  - {name: Canary Traffic Percent,    type: Integer,    optional: true,         description: 'CanaryTrafficPercent defines the percentage of traffic going to canary PaddleService endpoints.'}
+  - {name: Service,                   type: JsonObject, optional: true,         description: 'Service defines the configuration for Knative Service.'}
+  - {name: WorkingDir,                type: String,     optional: true,         description: 'Working directory of container.'}
+  - {name: VolumeMounts,              type: JsonObject, optional: true,         description: 'Pod volumes to mount into the container filesystem.'}
+  - {name: Volumes,                   type: JsonObject, optional: true,         description: 'List of volumes that can be mounted by containers belonging to the pod.'}
+
+outputs:
+  - {name: Output Path,               type: String,                             description: 'The path store json format of knative service'}
+implementation:
+  container:
+    image: xiaolao/paddle-launcher:latest
+    command: [python, launch_serving.py]
+    args:
+      - --name
+      - {inputValue: name}
+      - --namespace
+      - {inputValue: namespace}
+      - --version
+      - {inputValue: version}
+      - --action
+      - {inputValue: Action}
+      - --runtimeVersion
+      - {inputValue: Runtime Version}
+      - --default
+      - {inputValue: Default}
+      - --outputPath
+      - {outputPath: Output Path}
+      - if:
+          cond: {isPresent: Resources}
+          then:
+          - --resources
+          - {inputValue: Resources}
+      - if:
+          cond: {isPresent: Canary}
+          then:
+          - --canary
+          - {inputValue: Canary}
+      - if:
+          cond: {isPresent: Canary Traffic Percent}
+          then:
+          - --canaryTrafficPercent
+          - {inputValue: Canary Traffic Percent}
+      - if:
+          cond: {isPresent: Service}
+          then:
+          - --service
+          - {inputValue: Service}
+      - if:
+          cond: {isPresent: WorkingDir}
+          then:
+          - --workingDir
+          - {inputValue: WorkingDir}
+      - if:
+          cond: {isPresent: VolumeMounts}
+          then:
+          - --volumeMounts
+          - {inputValue: VolumeMounts}
+      - if:
+          cond: {isPresent: Volumes}
+          then:
+          - --volumes
+          - {inputValue: Volumes}
+      - if:
+          cond: { isPresent: Volumes }
+          then:
+            - --volumes
+            - { inputValue: Volumes }
+      - if:
+          cond: {isPresent: Timeout Minutes}
+          then:
+            - --timeoutMinutes
+            - {inputValue: Timeout Minutes}

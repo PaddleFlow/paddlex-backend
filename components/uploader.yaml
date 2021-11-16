@@ -1,0 +1,38 @@
+name: Modle Uploader
+description: Upload model to model-center bucket of minio
+inputs:
+  - {name: endpoint,    description: 'Endpoint of minio server'}
+  - {name: model_file,  description: 'The model file need to upload'}
+  - {name: model_name,  description: 'Minio Bucket name'}
+  - {name: version,     description: 'Minio folder name to upload the files'}
+
+implementation:
+  container:
+    image: xiaolao/model-uploader:latest
+    command:
+    - sh
+    - -exc
+    - |
+      endpoint=$0
+      model_file=$1
+      model_name=$2
+      version=$3
+
+      # MINIO_ACCESS_ID and MINIO_SECRET_KEY is from environment variable
+      mc config host add minio ${endpoint} ${MINIO_ACCESS_KEY} ${MINIO_SECRET_KEY} --api s3v4
+
+      # make bucket of model-center
+      mc mb --ignore-existing minio/model-center
+
+      # change the policy to download of bucket model-center
+      mc policy set download minio/model-center/
+
+      # upload model file to model-center bucket of minio
+      mc cp $model_file minio/model-center/${model_name}/${version}/
+
+      echo "upload model to minio/model-center/${model_name}/${version}/"
+    args:
+      - {inputValue: endpoint}
+      - {inputValue: model_file}
+      - {inputValue: model_name}
+      - {inputValue: version}

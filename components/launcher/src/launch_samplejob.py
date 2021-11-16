@@ -1,17 +1,3 @@
-# Copyright 2019 kubeflow.org.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#      http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 import argparse
 import datetime
 from distutils.util import strtobool
@@ -58,6 +44,9 @@ def main(argv=None):
     parser.add_argument('--version', type=str,
                         default='v1alpha1',
                         help='SampleJob version.')
+    parser.add_argument('--action', type=str,
+                        default='create',
+                        help='Action to execute on SampleJob.')
     parser.add_argument('--timeoutMinutes', type=int,
                         default=60*24,
                         help='Time in minutes to wait for the SampleJob to reach end')
@@ -111,13 +100,27 @@ def main(argv=None):
     if args.jobOptions:
         inst["spec"].update(args.jobOptions)
 
-    create_response = sample_job.create(inst)
-    print("create SampleJob have response {}".format(create_response))
+    if args.action == "create":
+        response = sample_job.create(inst)
+    elif args.action == "patch":
+        response = sample_job.patch(inst)
+    elif args.action == "apply":
+        response = sample_job.apply(inst)
+    elif args.action == "delete":
+        response = sample_job.delete(args.name, args.namespace)
+        print("Delete SampleJob have response {}".format(response))
+        return
+    else:
+        raise Exception("action must be one of create/patch/apply/delete")
 
-    expected_conditions = ["Succeeded", "Failed"]
+    print("{} SampleJob have response {}".format(args.action, response))
+
+    error_phases = ["Failed"]
+    expected_conditions = ["Succeeded"]
     sample_job.wait_for_condition(
-        args.namespace, args.name, expected_conditions,
+        args.namespace, args.name, expected_conditions, error_phases,
         timeout=datetime.timedelta(minutes=args.timeoutMinutes))
+
     if args.deleteAfterDone:
         sample_job.delete(args.name, args.namespace)
 
