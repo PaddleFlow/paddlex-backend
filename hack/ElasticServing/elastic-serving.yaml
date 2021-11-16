@@ -798,7 +798,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: elasticserving-leader-election-role
-  namespace: elasticserving-system
+  namespace: kubeflow
 rules:
 - apiGroups:
   - ""
@@ -988,15 +988,15 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: elasticserving-leader-election-rolebinding
-  namespace: elasticserving-system
+  namespace: kubeflow
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: elasticserving-leader-election-role
 subjects:
 - kind: ServiceAccount
-  name: default
-  namespace: elasticserving-system
+  name: paddle-pipeline
+  namespace: kubeflow
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -1008,8 +1008,8 @@ roleRef:
   name: elasticserving-manager-role
 subjects:
 - kind: ServiceAccount
-  name: default
-  namespace: elasticserving-system
+  name: paddle-pipeline
+  namespace: kubeflow
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -1021,40 +1021,40 @@ roleRef:
   name: elasticserving-proxy-role
 subjects:
 - kind: ServiceAccount
-  name: default
-  namespace: elasticserving-system
+  name: paddle-pipeline
+  namespace: kubeflow
 ---
 apiVersion: v1
 kind: Service
 metadata:
   labels:
-    control-plane: controller-manager
-  name: elasticserving-controller-manager-metrics-service
-  namespace: elasticserving-system
+    control-plane: elasticserving-controller
+  name: elasticserving-controller-metrics-service
+  namespace: kubeflow
 spec:
   ports:
   - name: https
     port: 8443
     targetPort: https
   selector:
-    control-plane: controller-manager
+    control-plane: elasticserving-controller
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
-    control-plane: controller-manager
-  name: elasticserving-controller-manager
-  namespace: elasticserving-system
+    control-plane: elasticserving-controller
+  name: elasticserving-controller
+  namespace: kubeflow
 spec:
   replicas: 1
   selector:
     matchLabels:
-      control-plane: controller-manager
+      control-plane: elasticserving-controller
   template:
     metadata:
       labels:
-        control-plane: controller-manager
+        control-plane: elasticserving-controller
     spec:
       containers:
       - args:
