@@ -30,7 +30,7 @@ implementation:
       - --version
       - {inputValue: version}
       - --action
-      - {inputValue: Action},
+      - {inputValue: Action}
       - --runtimeVersion
       - {inputValue: Runtime Version}
       - --default

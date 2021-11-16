@@ -131,12 +131,8 @@ rules:
   resources:
   - secrets
   verbs:
-  - create
-  - delete
   - get
   - list
-  - patch
-  - update
   - watch
 - apiGroups:
   - ""
@@ -315,6 +311,12 @@ rules:
   verbs:
   - create
 ---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: paddle-manager-sa
+  namespace: kubeflow
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
@@ -326,7 +328,7 @@ roleRef:
   name: paddle-leader-election-role
 subjects:
 - kind: ServiceAccount
-  name: paddle-pipeline
+  name: paddle-manager-sa
   namespace: kubeflow
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -339,7 +341,7 @@ roleRef:
   name: paddle-manager-role-kubeflow
 subjects:
 - kind: ServiceAccount
-  name: paddle-pipeline
+  name: paddle-manager-sa
   namespace: kubeflow
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -352,7 +354,7 @@ roleRef:
   name: paddle-proxy-role-kubeflow
 subjects:
 - kind: ServiceAccount
-  name: paddle-pipeline
+  name: paddle-manager-sa
   namespace: kubeflow
 ---
 apiVersion: v1
@@ -438,7 +440,7 @@ spec:
           allowPrivilegeEscalation: false
       securityContext:
         runAsUser: 65532
-      serviceAccountName: paddle-pipeline
+      serviceAccountName: paddle-manager-sa
       terminationGracePeriodSeconds: 10
 ---
 apiVersion: apps/v1
@@ -490,7 +492,7 @@ spec:
             allowPrivilegeEscalation: false
       securityContext:
         runAsUser: 65532
-      serviceAccountName: paddle-pipeline
+      serviceAccountName: paddle-manager-sa
       terminationGracePeriodSeconds: 10
 ---
 apiVersion: apps/v1
@@ -542,5 +544,5 @@ spec:
             allowPrivilegeEscalation: false
       securityContext:
         runAsUser: 65532
-      serviceAccountName: paddle-pipeline
+      serviceAccountName: paddle-manager-sa
       terminationGracePeriodSeconds: 10
