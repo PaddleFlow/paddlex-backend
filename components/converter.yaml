@@ -1,0 +1,30 @@
+name: Modle Converter
+description: Convert model format for Paddle Serving
+inputs:
+  - {name: mount_path,  description: 'Endpoint of minio server'}
+  - {name: model_name,  description: 'The name of model'}
+  - {name: dirname,     description: 'The dirname of model checkpoint'}
+
+implementation:
+  container:
+    image: registry.baidubce.com/paddleflow-public/serving:v0.6.2
+    command:
+      - sh
+      - -exc
+      - |
+        mount_path=$0
+        model_name=$1
+        dirname=$2
+
+        cd $mount_path && mkdir -p $model_name
+        echo "mkdir dir ${$model_name} successfully"
+
+        python3 -m paddle_serving_client.convert --dirname $dirname --model_filename rec_inference.pdmodel --params_filename rec_inference.pdiparams --serving_server ./${model_name}/server/ --serving_client ./${model_name}/client/
+        echo "convert ${model_name} format suucessfully"
+
+        tar czf {model_name}.tar.gz {model_name}/
+        echo "compress and tar ${model_name} suucessfully"
+    args:
+      - {inputValue: mount_path}
+      - {inputValue: model_name}
+      - {inputValue: dirname}
