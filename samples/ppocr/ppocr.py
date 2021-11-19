@@ -1,5 +1,3 @@
-import os
-
 import kfp
 import kfp.dsl as dsl
 from kfp import components
@@ -10,26 +8,27 @@ NAMESPACE = "kubeflow"
 # model name and file
 MODEL_NAME = "ppocr-det"
 MODEL_VERSION = "latest"
-MODEL_FILE = "wide-deep.tar.gz"
-TRAIN_EPOCH = 4
+MODEL_FILE = "ppocr-det.tar.gz"
+PERTRAIN = "pretrain_models"
+INFERENCE = "inference"
 
 # data source and storage
+DATA_CENTER_NAME = "data-center"
 DATA_SOURCE_SECRET_NAME = "data-source"
 DATA_CENTER_SECRET_NAME = "data-center"
 DATA_SOURCE_URI = "bos://paddleflow-public.hkg.bcebos.com/icdar2015/"
 
 # SampleSet
-SAMPLE_SET_NAME = "icdar2015"
-SAMPLE_SET_PATH = "/mnt/icdar2015"
+DATA_SET_NAME = "icdar2015"
+DATA_MOUNT_PATH = f"/mnt/{DATA_CENTER_NAME}"
 
 # config file and path
-CONFIG_PATH = "/mnt/config/"
 CONFIG_FILE = "det_mv3_db.yml"
 
 # PaddleJob
 TASK_MOUNT_PATH = "/mnt/task-center/"
 MODEL_PATH = "/mnt/task-center/models/"
-PADDLE_JOB_IMAGE = "registry.baidubce.com/paddleflow-public/paddleocr:2.1.0-gpu-cuda10.2-cudnn7"
+PADDLE_JOB_IMAGE = "registry.baidubce.com/paddleflow-public/paddleocr:2.1.3-gpu-cuda10.2-cudnn7"
 
 # minio host
 MINIO_ENDPOINT = "http://minio-service.kubeflow:9000"
@@ -75,19 +74,23 @@ def create_sample_set():
     sampleset_launcher_op = components.load_component_from_file("../../components/sampleset.yaml")
 
     return sampleset_launcher_op(
-        name=SAMPLE_SET_NAME,
+        name=DATA_CENTER_NAME,
         namespace=NAMESPACE,
         action="apply",
         partitions=1,
         secret_ref={"name": DATA_CENTER_SECRET_NAME}
-    ).set_display_name(f"create sample set {SAMPLE_SET_NAME}")
+    ).set_display_name("create sample set")
 
 
 def create_model_config(volume_op):
+    arg_1 = "{ 'type': Fliplr, 'args': { 'p': 0.5 } }"
+    arg_2 = "{ 'type': Affine, 'args': { 'rotate': [-10, 10] } }"
+    arg_3 = "{ 'type': Resize, 'args': { 'size': [0.5, 3] } }"
+
     det_mv3_db = f"""
-Global:
+Global: 
   use_gpu: true
-  epoch_num: 1200
+  epoch_num: 10
   log_smooth_window: 20
   print_batch_step: 10
   save_model_dir: {MODEL_PATH}
@@ -95,9 +98,9 @@ Global:
   # evaluation is run every 2000 iterations after the 0th iteration
   eval_batch_step: [0, 2000]
   cal_metric_during_train: False
-  pretrained_model: ./pretrain_models/MobileNetV3_large_x0_5_pretrained
+  pretrained_model: {TASK_MOUNT_PATH}{PERTRAIN}/MobileNetV3_large_x0_5_pretrained
   checkpoints:
-  save_inference_dir:
+  save_inference_dir: {TASK_MOUNT_PATH}{INFERENCE}
   use_visualdl: False
   infer_img: doc/imgs_en/img_10.jpg
   save_res_path: ./output/det_db/predicts_db.txt
@@ -149,9 +152,9 @@ Metric:
 Train:
   dataset:
     name: SimpleDataSet
-    data_dir: {SAMPLE_SET_PATH}/{SAMPLE_SET_NAME}/icdar_c4_train_imgs/
+    data_dir: {DATA_MOUNT_PATH}/{DATA_SET_NAME}/
     label_file_list:
-      - {SAMPLE_SET_PATH}/{SAMPLE_SET_NAME}/train_icdar2015_label.txt
+      - {DATA_MOUNT_PATH}/{DATA_SET_NAME}/train_icdar2015_label.txt
     ratio_list: [1.0]
     transforms:
       - DecodeImage: # load image
@@ -160,9 +163,9 @@ Train:
       - DetLabelEncode: # Class handling label
       - IaaAugment:
           augmenter_args:
-            - { 'type': Fliplr, 'args': { 'p': 0.5 } }
-            - { 'type': Affine, 'args': { 'rotate': [-10, 10] } }
-            - { 'type': Resize, 'args': { 'size': [0.5, 3] } }
+            - {arg_1}
+            - {arg_2}
+            - {arg_3}
       - EastRandomCropData:
           size: [640, 640]
           max_tries: 50
@@ -192,9 +195,9 @@ Train:
 Eval:
   dataset:
     name: SimpleDataSet
-    data_dir: {SAMPLE_SET_PATH}/{SAMPLE_SET_NAME}/ch4_test_images/
+    data_dir: {DATA_MOUNT_PATH}/{DATA_SET_NAME}/
     label_file_list:
-      - {SAMPLE_SET_PATH}/{SAMPLE_SET_NAME}/test_icdar2015_label.txt
+      - {DATA_MOUNT_PATH}/{DATA_SET_NAME}/test_icdar2015_label.txt
     transforms:
       - DecodeImage: # load image
           img_mode: BGR
@@ -218,9 +221,9 @@ Eval:
     use_shared_memory: False
 """
     write_config = components.load_component_from_file("../../components/configure.yaml")
-    write_config_op = write_config(path=CONFIG_PATH, filename=CONFIG_FILE, content=det_mv3_db)
+    write_config_op = write_config(path=TASK_MOUNT_PATH, filename=CONFIG_FILE, content=det_mv3_db)
 
-    write_config_op.add_pvolumes({CONFIG_PATH: volume_op.volume})
+    write_config_op.add_pvolumes({TASK_MOUNT_PATH: volume_op.volume})
     write_config_op.set_display_name("create config file")
     return write_config_op
 
@@ -231,7 +234,7 @@ def create_sample_job():
     sync_options = {
         "syncOptions": {
             "source": DATA_SOURCE_URI,
-            "destination": SAMPLE_SET_NAME,
+            "destination": DATA_SET_NAME,
         }
     }
     return samplejob_launcher_op(
@@ -240,7 +243,7 @@ def create_sample_job():
         type="sync",
         delete_after_done=True,
         job_options=sync_options,
-        sampleset_ref={"name": SAMPLE_SET_NAME},
+        sampleset_ref={"name": DATA_CENTER_NAME},
         secret_ref={"name": DATA_SOURCE_SECRET_NAME}
     ).set_display_name("sync remote data to local")
 
@@ -248,16 +251,15 @@ def create_sample_job():
 def create_paddle_job(volume_op):
     paddlejob_launcher_op = components.load_component_from_file("../../components/paddlejob.yaml")
 
+    args = f"wget -P {TASK_MOUNT_PATH}{PERTRAIN}/ https://paddle-imagenet-models-name.bj.bcebos.com/dygraph/MobileNetV3_large_x0_5_pretrained.pdparams && " \
+           f"python -m paddle.distributed.launch --gpus '0,1' --log_dir {TASK_MOUNT_PATH} tools/train.py -c  {TASK_MOUNT_PATH}{CONFIG_FILE}"
+
     container = {
         "name": "paddleocr",
         "image": PADDLE_JOB_IMAGE,
-        "workingDir": "/home/PaddleRec/models/rank/wide_deep",
-        "command": ["python3"],
+        "command": ["/bin/bash"],
         "args": [
-            "-m", "paddle.distributed.launch",
-            "--gpus", "0,1",
-            "tools/train.py",
-            "-c", f"{CONFIG_PATH}/{CONFIG_FILE}",
+            "-c", args
         ],
         "volumeMounts": [
             {
@@ -303,15 +305,45 @@ def create_paddle_job(volume_op):
         delete_after_done=True,
         worker_spec=worker,
         sampleset_ref={
-            "name": SAMPLE_SET_NAME,
-            "mountPath": SAMPLE_SET_PATH,
+            "name": DATA_CENTER_NAME,
+            "mountPath": DATA_MOUNT_PATH
         }
     ).set_display_name("train ppocr detection model")
 
 
+def create_inference_op(volume_op):
+    infer_op = dsl.ContainerOp(
+        name="Save Inference Model",
+        image=PADDLE_JOB_IMAGE,
+        command="python",
+        arguments=[
+            "tools/export_model.py",
+            "-c", f"{TASK_MOUNT_PATH}{CONFIG_FILE}"
+        ],
+        container_kwargs={
+            "resources": {
+                "limits": {
+                    "nvidia.com/gpu": 1,
+                }
+            }
+        }
+    )
+    infer_op.add_pvolumes({TASK_MOUNT_PATH: volume_op.volume})
+    infer_op.set_display_name("Save Inference Model")
+    return infer_op
+
+
 def create_convert_op(volume_op):
-    model_converter = components.load_component_from_file("../../components/paddlejob.yaml")
-    convert_op = model_converter(mount_path=TASK_MOUNT_PATH, model_name=MODEL_NAME, dirname=MODEL_PATH)
+    infer_model_path = f"{TASK_MOUNT_PATH}{INFERENCE}/"
+    model_converter = components.load_component_from_file("../../components/converter.yaml")
+
+    convert_op = model_converter(
+        mount_path=TASK_MOUNT_PATH,
+        model_name=MODEL_NAME,
+        dirname=infer_model_path,
+        pdmodel="inference.pdmodel",
+        pdiparams="inference.pdiparams"
+    )
     convert_op.add_pvolumes({TASK_MOUNT_PATH: volume_op.volume})
     convert_op.set_display_name("Convert Model Format")
     return convert_op
@@ -375,30 +407,35 @@ def ppocr_detection_demo():
     # 1. create volume for config task and PaddleJob
     volume_op = create_volume_op()
 
-    # 1. create secret for data source
+    # 2. create secret for data source
     secret_op = create_resource_op()
 
-    # 2. create or update SampleSet
+    # 3. create or update SampleSet
     sample_set_task = create_sample_set()
 
-    # 2. create configmap for model
+    # 4. create configmap for model
     create_config_task = create_model_config(volume_op)
     create_config_task.after(volume_op)
     create_config_task.execution_options.caching_strategy.max_cache_staleness = "P0D"
 
-    # 3. create SampleJob and wait it finish data synchronization
+    # 5. create SampleJob and wait it finish data synchronization
     sample_job_task = create_sample_job()
     sample_job_task.after(secret_op, sample_set_task)
     sample_job_task.execution_options.caching_strategy.max_cache_staleness = "P0D"
 
-    # 4. create PaddleJob and wait it finish model training
+    # 6. create PaddleJob and wait it finish model training
     paddle_job_task = create_paddle_job(volume_op)
     paddle_job_task.after(create_config_task, sample_job_task)
     paddle_job_task.execution_options.caching_strategy.max_cache_staleness = "P0D"
 
+    # 7. create and save inference model
+    infer_op = create_inference_op(volume_op)
+    infer_op.after(paddle_job_task)
+    infer_op.execution_options.caching_strategy.max_cache_staleness = "P0D"
+
     # 5. convert model format and generate client/server proto file
     convert_op = create_convert_op(volume_op)
-    convert_op.after(paddle_job_task)
+    convert_op.after(infer_op)
     convert_op.execution_options.caching_strategy.max_cache_staleness = "P0D"
 
     # 6. pack and compress model file then upload it to model-center

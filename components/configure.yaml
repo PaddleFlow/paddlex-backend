@@ -14,6 +14,7 @@ implementation:
       - -c
       - |
         import os
+        import sys
 
         path = sys.argv[1]
         filename = sys.argv[2]
@@ -23,12 +24,12 @@ implementation:
             os.makedirs(path)
 
         filepath = os.path.join(path, filename)
-            with open(filepath, "w") as f:
-                f.write(content)
+        with open(filepath, "w") as f:
+            f.write(content)
 
         print("write config success: \n\n {}".format(content))
 
     args:
-      - {inputValue: Path}
+      - {inputValue: path}
       - {inputValue: filename}
       - {inputValue: content}
