@@ -90,9 +90,9 @@ def create_model_config(volume_op):
     det_mv3_db = f"""
 Global: 
   use_gpu: true
-  epoch_num: 10
-  log_smooth_window: 20
-  print_batch_step: 10
+  epoch_num: 20
+  log_smooth_window: 2
+  print_batch_step: 5
   save_model_dir: {MODEL_PATH}
   save_epoch_step: 1200
   # evaluation is run every 2000 iterations after the 0th iteration
@@ -101,7 +101,7 @@ Global:
   pretrained_model: {TASK_MOUNT_PATH}{PERTRAIN}/MobileNetV3_large_x0_5_pretrained
   checkpoints:
   save_inference_dir: {TASK_MOUNT_PATH}{INFERENCE}
-  use_visualdl: False
+  use_visualdl: True
   infer_img: doc/imgs_en/img_10.jpg
   save_res_path: ./output/det_db/predicts_db.txt
 
@@ -252,7 +252,7 @@ def create_paddle_job(volume_op):
     paddlejob_launcher_op = components.load_component_from_file("../../components/paddlejob.yaml")
 
     args = f"wget -P {TASK_MOUNT_PATH}{PERTRAIN}/ https://paddle-imagenet-models-name.bj.bcebos.com/dygraph/MobileNetV3_large_x0_5_pretrained.pdparams && " \
-           f"python -m paddle.distributed.launch --gpus '0,1' --log_dir {TASK_MOUNT_PATH} tools/train.py -c  {TASK_MOUNT_PATH}{CONFIG_FILE}"
+           f"python -m paddle.distributed.launch --gpus '0,1,2,3,4,5,6,7' --log_dir {TASK_MOUNT_PATH} tools/train.py -c  {TASK_MOUNT_PATH}{CONFIG_FILE}"
 
     container = {
         "name": "paddleocr",
@@ -273,7 +273,7 @@ def create_paddle_job(volume_op):
         ],
         "resources": {
             "limits": {
-                "nvidia.com/gpu": 2
+                "nvidia.com/gpu": 8
             }
         }
     }
@@ -399,6 +399,20 @@ def create_serving_op():
     return serving_op
 
 
+def create_visualdl_op(volume_op):
+    create_visualdl = components.load_component_from_file("../../components/visualdl.yaml")
+    visualdl_op = create_visualdl(
+        name=MODEL_NAME+"-"+"visualdl",
+        namespace=NAMESPACE,
+        pvc_name=volume_op.volume.persistent_volume_claim.claim_name,
+        mount_path=TASK_MOUNT_PATH,
+        logdir=MODEL_PATH+"vdl/",
+        model=f"{TASK_MOUNT_PATH}{MODEL_NAME}/server/__model__",
+    )
+    visualdl_op.set_display_name("deploy VisualDL")
+    return visualdl_op
+
+
 @dsl.pipeline(
     name="ppocr-detection-demo",
     description="An example for using ppocr train .",
@@ -433,18 +447,23 @@ def ppocr_detection_demo():
     infer_op.after(paddle_job_task)
     infer_op.execution_options.caching_strategy.max_cache_staleness = "P0D"
 
-    # 5. convert model format and generate client/server proto file
+    # 8. convert model format and generate client/server proto file
     convert_op = create_convert_op(volume_op)
     convert_op.after(infer_op)
     convert_op.execution_options.caching_strategy.max_cache_staleness = "P0D"
 
-    # 6. pack and compress model file then upload it to model-center
+    # 9. deploy VisualDl service
+    visualdl_op = create_visualdl_op(volume_op)
+    visualdl_op.after(convert_op)
+    visualdl_op.execution_options.caching_strategy.max_cache_staleness = "P0D"
+
+    # 10. pack and compress model file then upload it to model-center
     upload_op = create_upload_op(volume_op)
     upload_op.after(convert_op)
     upload_op.execution_options.caching_strategy.max_cache_staleness = "P0D"
     # volume_op.delete()
 
-    # 7. download model file and deploy PaddleServing
+    # 11. download model file and deploy PaddleServing
     serving_op = create_serving_op()
     serving_op.after(upload_op)
     serving_op.execution_options.caching_strategy.max_cache_staleness = "P0D"
