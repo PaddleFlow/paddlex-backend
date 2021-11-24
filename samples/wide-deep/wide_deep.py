@@ -13,17 +13,17 @@ MODEL_VERSION = "latest"
 MODEL_FILE = "wide-deep.tar.gz"
 TRAIN_EPOCH = 4
 
-# SampleSet
-SAMPLE_SET_NAME = "criteo"
-SAMPLE_SET_PATH = "/mnt/criteo"
-
 # data source and storage
+DATA_CENTER_NAME = "data-center"
 DATA_SOURCE_SECRET_NAME = "data-source"
 DATA_CENTER_SECRET_NAME = "data-center"
 DATA_SOURCE_URI = "bos://paddleflow-public.hkg.bcebos.com/criteo/demo/"
 
-# config file and path
-CONFIG_PATH = "/mnt/config/"
+# SampleSet
+DATA_SET_NAME = "criteo"
+DATA_MOUNT_PATH = f"/mnt/{DATA_CENTER_NAME}"
+
+# config file
 CONFIG_FILE = "wide_deep_config.yaml"
 
 # PaddleJob
@@ -42,12 +42,12 @@ def create_sample_set():
     sampleset_launcher_op = components.load_component_from_file("../../components/sampleset.yaml")
 
     return sampleset_launcher_op(
-        name=SAMPLE_SET_NAME,
+        name=DATA_CENTER_NAME,
         namespace=NAMESPACE,
         action="apply",
         partitions=1,
         secret_ref={"name": DATA_CENTER_SECRET_NAME}
-    ).set_display_name(f"create sample set {SAMPLE_SET_NAME}")
+    ).set_display_name(f"create sample set")
 
 
 def create_sample_job():
@@ -56,7 +56,7 @@ def create_sample_job():
     sync_options = {
         "syncOptions": {
             "source": DATA_SOURCE_URI,
-            "destination": SAMPLE_SET_NAME,
+            "destination": DATA_SET_NAME,
         }
     }
     return samplejob_launcher_op(
@@ -65,7 +65,7 @@ def create_sample_job():
         type="sync",
         delete_after_done=True,
         job_options=sync_options,
-        sampleset_ref={"name": SAMPLE_SET_NAME},
+        sampleset_ref={"name": DATA_CENTER_NAME},
         secret_ref={"name": DATA_SOURCE_SECRET_NAME}
     ).set_display_name("sync remote data to local")
 
@@ -86,7 +86,7 @@ def create_model_config(volume_op):
 # wide_deep_config.yaml
 # global settings
 runner:
-  train_data_dir: "{SAMPLE_SET_PATH}/{SAMPLE_SET_NAME}/slot_train_data_full/"
+  train_data_dir: "{DATA_MOUNT_PATH}/{DATA_SET_NAME}/slot_train_data_full/"
   train_reader_path: "criteo_reader" # importlib format
   use_gpu: True
   use_auc: True
@@ -94,7 +94,7 @@ runner:
   epochs: {TRAIN_EPOCH}
   print_interval: 10
   model_save_path: {MODEL_CHECKPOINT_PATH}
-  test_data_dir: "{SAMPLE_SET_PATH}/{SAMPLE_SET_NAME}/slot_test_data_full"
+  test_data_dir: "{DATA_MOUNT_PATH}/{DATA_SET_NAME}/slot_test_data_full"
   infer_reader_path: "criteo_reader" # importlib format
   infer_batch_size: 4096
   infer_load_path: {MODEL_CHECKPOINT_PATH}
@@ -126,8 +126,8 @@ hyper_parameters:
         func=write_config_file,
         base_image="python:3.7",
     )
-    task_op = create_config(CONFIG_PATH, CONFIG_FILE, wide_deep_config)
-    task_op.add_pvolumes({CONFIG_PATH: volume_op.volume})
+    task_op = create_config(TASK_MOUNT_PATH, CONFIG_FILE, wide_deep_config)
+    task_op.add_pvolumes({TASK_MOUNT_PATH: volume_op.volume})
     task_op.set_display_name("create config file")
 
     return task_op
@@ -190,8 +190,8 @@ def create_paddle_job(volume_op):
         delete_after_done=True,
         worker_spec=worker,
         sampleset_ref={
-            "name": SAMPLE_SET_NAME,
-            "mountPath": SAMPLE_SET_PATH,
+            "name": DATA_CENTER_NAME,
+            "mountPath": DATA_MOUNT_PATH,
         }
     ).set_display_name("train wide and deep")
 
@@ -310,7 +310,7 @@ def wide_deep_demo():
 
     # 2. create or update SampleSet for Criteo which is stored in remote storage
     sample_set_task = create_sample_set()
-    sample_set_task.execution_options.caching_strategy.max_cache_staleness = "P0D"
+    # sample_set_task.execution_options.caching_strategy.max_cache_staleness = "P0D"
 
     # 2. create configmap for wide-and-deep model
     create_config_task = create_model_config(volume_op)

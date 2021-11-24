@@ -1,0 +1,35 @@
+name: Write Config File
+description: Write Model Training Config File to Volume
+inputs:
+  - {name: path,        description: 'The path that the config file need write to'}
+  - {name: filename,    description: 'The name of config file'}
+  - {name: content,     description: 'The content of configs in yaml format'}
+
+implementation:
+  container:
+    image: python:3.7
+    command:
+      - python
+      - -u
+      - -c
+      - |
+        import os
+        import sys
+
+        path = sys.argv[1]
+        filename = sys.argv[2]
+        content = sys.argv[3]
+
+        if not os.path.exists(path):
+            os.makedirs(path)
+
+        filepath = os.path.join(path, filename)
+        with open(filepath, "w") as f:
+            f.write(content)
+
+        print("write config success: \n\n {}".format(content))
+
+    args:
+      - {inputValue: path}
+      - {inputValue: filename}
+      - {inputValue: content}

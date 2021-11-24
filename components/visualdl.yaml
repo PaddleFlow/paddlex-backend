@@ -1,0 +1,69 @@
+name: VisualDL
+description: visualization tool of PaddlePaddle
+inputs:
+  - {name: name,                      type: String,                             description: 'The name of VisualDL deployment.'}
+  - {name: namespace,                 type: String,     default: kubeflow,      description: 'The namespace of VisualDL deployment.'}
+  - {name: Timeout Minutes,           type: Integer,    optional: true,         description: 'Time in minutes to wait for the VisaulDL deployments to be ready.'}
+  - {name: Action,                    type: String,     default: apply,         description: 'Action to execute on VisualDl deployment.'}
+  - {name: PVC Name,                  type: String,                             description: 'The pvc claim name of pipeline.'}
+  - {name: Mount Path,                type: String,                             description: 'The path that should mount to.'}
+  - {name: Logdir,                    type: String,                             description: 'Set one or more directories of the log.'}
+  - {name: Model,                     type: String,     optional: true,         description: 'Set a path to the model file (not a directory).'}
+  - {name: Port,                      type: Integer,    optional: true,         description: 'Set the port.'}
+  - {name: Cache Timeout,             type: Integer,    optional: true,         description: 'Cache time of the backend.'}
+  - {name: Language,                  type: String,     optional: true,         description: 'The language of the VisualDL panel.'}
+  - {name: Public Path,               type: String,     optional: true,         description: 'The URL path of the VisualDL panel.'}
+  - {name: Api Only,                  type: String,     optional: true,         description: 'Decide whether or not to provide only API.'}
+
+implementation:
+  container:
+    image: xiaolao/paddle-launcher:latest
+    command: [python, launch_visualdl.py]
+    args:
+      - --name
+      - {inputValue: name}
+      - --namespace
+      - {inputValue: namespace}
+      - --action
+      - {inputValue: Action}
+      - --pvc_name
+      - {inputValue: PVC Name}
+      - --mount_path
+      - {inputValue: Mount Path}
+      - --logdir
+      - {inputValue: Logdir}
+      - if:
+          cond: {isPresent: Model}
+          then:
+            - --model
+            - {inputValue: Model}
+      - if:
+          cond: {isPresent: Port}
+          then:
+            - --port
+            - {inputValue: Port}
+      - if:
+          cond: {isPresent: Cache Timeout}
+          then:
+            - --cache_timeout
+            - {inputValue: Cache Timeout}
+      - if:
+          cond: {isPresent: Language}
+          then:
+            - --language
+            - {inputValue: Language}
+      - if:
+          cond: {isPresent: Public Path}
+          then:
+            - --public_path
+            - {inputValue: Public Path}
+      - if:
+          cond: {isPresent: Api Only}
+          then:
+            - --api_only
+            - {inputValue: Api Only}
+      - if:
+          cond: {isPresent: Timeout Minutes}
+          then:
+            - --timeoutMinutes
+            - {inputValue: Timeout Minutes}
