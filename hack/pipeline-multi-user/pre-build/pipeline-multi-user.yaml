@@ -810,7 +810,7 @@ rules:
   resources:
   - secrets
   verbs:
-  - get
+  - "*"
 - apiGroups:
   - ""
   resources:
@@ -880,6 +880,28 @@ rules:
   - seldondeployments
   verbs:
   - '*'
+- apiGroups:
+  - batch.paddlepaddle.org
+  resources:
+  - paddlejobs
+  - samplesets
+  - samplejobs
+  verbs:
+  - '*'
+- apiGroups:
+  - elasticserving.paddlepaddle.org
+  resources:
+  - paddleservices
+  verbs:
+  - '*'
+- apiGroups:
+  - serving.knative.dev
+  resources:
+  - services
+  verbs:
+  - get
+  - list
+  - watch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -2403,33 +2425,33 @@ spec:
     app: workflow-controller
     application-crd-id: kubeflow-pipelines
 ---
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  labels:
-    application-crd-id: kubeflow-pipelines
-  name: minio-pvc
-  namespace: kubeflow
-spec:
-  accessModes:
-  - ReadWriteOnce
-  resources:
-    requests:
-      storage: 20Gi
+#apiVersion: v1
+#kind: PersistentVolumeClaim
+#metadata:
+#  labels:
+#    application-crd-id: kubeflow-pipelines
+#  name: minio-pvc
+#  namespace: kubeflow
+#spec:
+#  accessModes:
+#  - ReadWriteOnce
+#  resources:
+#    requests:
+#      storage: 20Gi
 ---
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  labels:
-    application-crd-id: kubeflow-pipelines
-  name: mysql-pv-claim
-  namespace: kubeflow
-spec:
-  accessModes:
-  - ReadWriteOnce
-  resources:
-    requests:
-      storage: 20Gi
+#apiVersion: v1
+#kind: PersistentVolumeClaim
+#metadata:
+#  labels:
+#    application-crd-id: kubeflow-pipelines
+#  name: mysql-pv-claim
+#  namespace: kubeflow
+#spec:
+#  accessModes:
+#  - ReadWriteOnce
+#  resources:
+#    requests:
+#      storage: 20Gi
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -2822,8 +2844,11 @@ spec:
           subPath: minio
       volumes:
       - name: data
-        persistentVolumeClaim:
-          claimName: minio-pvc
+        hostPath:
+          path: /dev/shm/minio
+          type: DirectoryOrCreate
+#        persistentVolumeClaim:
+#          claimName: minio-pvc
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -3294,8 +3319,11 @@ spec:
       serviceAccountName: mysql
       volumes:
       - name: mysql-persistent-storage
-        persistentVolumeClaim:
-          claimName: mysql-pv-claim
+        hostPath:
+          path: /dev/shm/mysql
+          type: DirectoryOrCreate
+#        persistentVolumeClaim:
+#          claimName: mysql-pv-claim
 ---
 apiVersion: apps/v1
 kind: Deployment

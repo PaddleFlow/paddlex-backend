@@ -28,7 +28,6 @@ resources:
   - dex/overlays/istio
   # KNative
   - knative/knative-serving/overlays/gateways
-  - knative/knative-eventing/base
   - istio-1-9/cluster-local-gateway/base
   # Kubeflow namespace
   - kubeflow-namespace/base

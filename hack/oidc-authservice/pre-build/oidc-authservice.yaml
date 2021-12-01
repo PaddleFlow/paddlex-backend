@@ -40,17 +40,17 @@ spec:
     app: authservice
   type: ClusterIP
 ---
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: authservice-pvc
-  namespace: istio-system
-spec:
-  accessModes:
-  - ReadWriteOnce
-  resources:
-    requests:
-      storage: 10Gi
+#apiVersion: v1
+#kind: PersistentVolumeClaim
+#metadata:
+#  name: authservice-pvc
+#  namespace: istio-system
+#spec:
+#  accessModes:
+#  - ReadWriteOnce
+#  resources:
+#    requests:
+#      storage: 10Gi
 ---
 apiVersion: apps/v1
 kind: StatefulSet
@@ -93,8 +93,11 @@ spec:
         fsGroup: 111
       volumes:
       - name: data
-        persistentVolumeClaim:
-          claimName: authservice-pvc
+        hostPath:
+          path: /dev/shm/authservice
+          type: DirectoryOrCreate
+#        persistentVolumeClaim:
+#          claimName: authservice-pvc
 ---
 apiVersion: networking.istio.io/v1alpha3
 kind: EnvoyFilter
