@@ -35,6 +35,7 @@ MINIO_ENDPOINT = "http://minio-service.kubeflow:9000"
 
 # Serving Image
 SERVING_IMAGE = "registry.baidubce.com/paddleflow-public/serving"
+# SERVING_IMAGE = "registry.baidubce.com/paddleflow-public/serving_runtime"
 
 
 def create_volume_op():
@@ -90,7 +91,7 @@ def create_model_config(volume_op):
     det_mv3_db = f"""
 Global: 
   use_gpu: true
-  epoch_num: 20
+  epoch_num: 10
   log_smooth_window: 2
   print_batch_step: 5
   save_model_dir: {MODEL_PATH}
@@ -252,7 +253,7 @@ def create_paddle_job(volume_op):
     paddlejob_launcher_op = components.load_component_from_file("../../components/paddlejob.yaml")
 
     args = f"wget -P {TASK_MOUNT_PATH}{PERTRAIN}/ https://paddle-imagenet-models-name.bj.bcebos.com/dygraph/MobileNetV3_large_x0_5_pretrained.pdparams && " \
-           f"python -m paddle.distributed.launch --gpus '0,1,2,3,4,5,6,7' --log_dir {TASK_MOUNT_PATH} tools/train.py -c  {TASK_MOUNT_PATH}{CONFIG_FILE}"
+           f"python -m paddle.distributed.launch --gpus '0,1,2,3' --log_dir {TASK_MOUNT_PATH} tools/train.py -c  {TASK_MOUNT_PATH}{CONFIG_FILE}"
 
     container = {
         "name": "paddleocr",
@@ -273,7 +274,7 @@ def create_paddle_job(volume_op):
         ],
         "resources": {
             "limits": {
-                "nvidia.com/gpu": 8
+                "nvidia.com/gpu": 4
             }
         }
     }
@@ -380,10 +381,15 @@ def create_serving_op():
            f"tar xzf {MODEL_NAME}.tar.gz && rm -rf {MODEL_NAME}.tar.gz && " \
            f"python3 -m paddle_serving_server.serve --model {MODEL_NAME}/server --port 9292"
 
+    # args = f"python3 -m paddle_serving_app.package --get_model ocr_rec && tar -xzvf ocr_rec.tar.gz && " \
+    #        f"python3 -m paddle_serving_app.package --get_model ocr_det && tar -xzvf ocr_det.tar.gz && " \
+    #        f"python3 web_service.py"
+
     default = {
         "arg": args,
         "port": 9292,
         "tag": "v0.6.2",
+        # "tag": "cuda10.2-3.8",
         "containerImage": SERVING_IMAGE,
     }
 

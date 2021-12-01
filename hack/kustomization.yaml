@@ -1,55 +1,59 @@
+# Copyright 2020 The Knative Authors
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
   # Cert-Manager
-  - ../common/cert-manager/cert-manager/base
-  - ../common/cert-manager/kubeflow-issuer/base
+  - ../cert-manager/cert-manager/base
+  - ../cert-manager/kubeflow-issuer/base
   # Istio
-  - ../common/istio-1-9/istio-crds/base
-  - ../common/istio-1-9/istio-namespace/base
-  - ../common/istio-1-9/istio-install/base
+  - ../istio-1-9/istio-crds/base
+  - ../istio-1-9/istio-namespace/base
+  - ../istio-1-9/istio-install/base
   # OIDC Authservice
   - ../common/oidc-authservice/base
   # Dex
   - ../common/dex/overlays/istio
   # KNative
   - ../common/knative/knative-serving/overlays/gateways
-  - ../common/knative/knative-eventing/base
-  - ../common/istio-1-9/cluster-local-gateway/base
+  - ../knative/knative-eventing/base
+  - ../istio-1-9/cluster-local-gateway/base
   # Kubeflow namespace
-  - ../common/kubeflow-namespace/base
+  - ../kubeflow-namespace/base
   # Kubeflow Roles
-  - ../common/kubeflow-roles/base
+  - ../kubeflow-roles/base
   # Kubeflow Istio Resources
-  - ../common/istio-1-9/kubeflow-istio-resources/base
+  - ../istio-1-9/kubeflow-istio-resources/base
 
 
   # Kubeflow Pipelines
-  - ../apps/pipeline/upstream/env/platform-agnostic-multi-user
-  # KFServing
-  - ../apps/kfserving/upstream/overlays/kubeflow
-  # Katib
-  - ../apps/katib/upstream/installs/katib-with-kubeflow
+  - ../pipeline-multi-user/upstream/env/platform-agnostic-multi-user
   # Central Dashboard
-  - ../apps/centraldashboard/upstream/overlays/istio
+  - ../centraldashboard/upstream/overlays/istio
   # Admission Webhook
-  - ../apps/admission-webhook/upstream/overlays/cert-manager
+  - ../admission-webhook/upstream/overlays/cert-manager
   # Notebook Controller
-  - ../apps/jupyter/jupyter-web-app/upstream/overlays/istio
+  - ../jupyter/jupyter-web-app/upstream/overlays/istio
   # Jupyter Web App
-  - ../apps/jupyter/notebook-controller/upstream/overlays/kubeflow
+  - ../jupyter/notebook-controller/upstream/overlays/kubeflow
   # Profiles + KFAM
-  - ../apps/profiles/upstream/overlays/kubeflow
+  - ../profiles/upstream/overlays/kubeflow
   # Volumes Web App
-  - ../apps/volumes-web-app/upstream/overlays/istio
-  # Tensorboards Controller
-  -  ../apps/tensorboard/tensorboard-controller/upstream/overlays/kubeflow
-  # Tensorboard Web App
-  -  ../apps/tensorboard/tensorboards-web-app/upstream/overlays/istio
-  # Training Operator
-  - ../apps/training-operator/upstream/overlays/kubeflow
-  # MPI Operator
-  - ../apps/mpi-job/upstream/overlays/kubeflow
+  - ../volumes-web-app/upstream/overlays/istio
+
+
   # User namespace
-  - ../common/user-namespace/base
+  - ../user-namespace/base
