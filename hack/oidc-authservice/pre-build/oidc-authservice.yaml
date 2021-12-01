@@ -93,11 +93,7 @@ spec:
         fsGroup: 111
       volumes:
       - name: data
-        hostPath:
-          path: /dev/shm/authservice
-          type: DirectoryOrCreate
-#        persistentVolumeClaim:
-#          claimName: authservice-pvc
+        emptyDir: {}
 ---
 apiVersion: networking.istio.io/v1alpha3
 kind: EnvoyFilter
