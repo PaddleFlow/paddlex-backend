@@ -1,10 +1,9 @@
-# Copyright 2020 The Knative Authors
-#
+# Copyright 2019 kubeflow.org.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     https://www.apache.org/licenses/LICENSE-2.0
+#      http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,43 +16,43 @@ kind: Kustomization
 
 resources:
   # Cert-Manager
-  - ../cert-manager/cert-manager/base
-  - ../cert-manager/kubeflow-issuer/base
+  - cert-manager/cert-manager/base
+  - cert-manager/kubeflow-issuer/base
   # Istio
-  - ../istio-1-9/istio-crds/base
-  - ../istio-1-9/istio-namespace/base
-  - ../istio-1-9/istio-install/base
+  - istio-1-9/istio-crds/base
+  - istio-1-9/istio-namespace/base
+  - istio-1-9/istio-install/base
   # OIDC Authservice
-  - ../common/oidc-authservice/base
+  - oidc-authservice/base
   # Dex
-  - ../common/dex/overlays/istio
+  - dex/overlays/istio
   # KNative
-  - ../common/knative/knative-serving/overlays/gateways
-  - ../knative/knative-eventing/base
-  - ../istio-1-9/cluster-local-gateway/base
+  - knative/knative-serving/overlays/gateways
+  - knative/knative-eventing/base
+  - istio-1-9/cluster-local-gateway/base
   # Kubeflow namespace
-  - ../kubeflow-namespace/base
+  - kubeflow-namespace/base
   # Kubeflow Roles
-  - ../kubeflow-roles/base
+  - kubeflow-roles/base
   # Kubeflow Istio Resources
-  - ../istio-1-9/kubeflow-istio-resources/base
+  - istio-1-9/kubeflow-istio-resources/base
 
 
   # Kubeflow Pipelines
-  - ../pipeline-multi-user/upstream/env/platform-agnostic-multi-user
+  - pipeline-multi-user/upstream/env/platform-agnostic-multi-user
   # Central Dashboard
-  - ../centraldashboard/upstream/overlays/istio
+  - centraldashboard/upstream/overlays/istio
   # Admission Webhook
-  - ../admission-webhook/upstream/overlays/cert-manager
+  - admission-webhook/upstream/overlays/cert-manager
   # Notebook Controller
-  - ../jupyter/jupyter-web-app/upstream/overlays/istio
+  - jupyter/jupyter-web-app/upstream/overlays/istio
   # Jupyter Web App
-  - ../jupyter/notebook-controller/upstream/overlays/kubeflow
+  - jupyter/notebook-controller/upstream/overlays/kubeflow
   # Profiles + KFAM
-  - ../profiles/upstream/overlays/kubeflow
+  - profiles/upstream/overlays/kubeflow
   # Volumes Web App
-  - ../volumes-web-app/upstream/overlays/istio
+  - volumes-web-app/upstream/overlays/istio
 
 
   # User namespace
-  - ../user-namespace/base
+  - user-namespace/base
