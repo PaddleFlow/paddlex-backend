@@ -1401,7 +1401,7 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  labels:mlpipeline-minio-artifact
+  labels:
     application-crd-id: kubeflow-pipelines
     component: metadata-envoy
   name: metadata-envoy-deployment

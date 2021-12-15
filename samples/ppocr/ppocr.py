@@ -91,7 +91,7 @@ def create_model_config(volume_op):
     det_mv3_db = f"""
 Global: 
   use_gpu: true
-  epoch_num: 10
+  epoch_num: 2
   log_smooth_window: 2
   print_batch_step: 5
   save_model_dir: {MODEL_PATH}
@@ -253,7 +253,7 @@ def create_paddle_job(volume_op):
     paddlejob_launcher_op = components.load_component_from_file("../../components/paddlejob.yaml")
 
     args = f"wget -P {TASK_MOUNT_PATH}{PERTRAIN}/ https://paddle-imagenet-models-name.bj.bcebos.com/dygraph/MobileNetV3_large_x0_5_pretrained.pdparams && " \
-           f"python -m paddle.distributed.launch --gpus '0,1,2,3' --log_dir {TASK_MOUNT_PATH} tools/train.py -c  {TASK_MOUNT_PATH}{CONFIG_FILE}"
+           f"python -m paddle.distributed.launch --gpus '0' --log_dir {TASK_MOUNT_PATH} tools/train.py -c  {TASK_MOUNT_PATH}{CONFIG_FILE}"
 
     container = {
         "name": "paddleocr",
@@ -274,7 +274,7 @@ def create_paddle_job(volume_op):
         ],
         "resources": {
             "limits": {
-                "nvidia.com/gpu": 4
+                "nvidia.com/gpu": 1
             }
         }
     }
@@ -432,6 +432,7 @@ def ppocr_detection_demo():
 
     # 3. create or update SampleSet
     sample_set_task = create_sample_set()
+    sample_set_task.execution_options.caching_strategy.max_cache_staleness = "P0D"
 
     # 4. create configmap for model
     create_config_task = create_model_config(volume_op)

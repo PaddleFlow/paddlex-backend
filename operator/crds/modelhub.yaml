@@ -1,0 +1,11 @@
+apiVersion: batch.paddlepaddle.org/v1alpha1
+kind: ModelHub
+metadata:
+  name: ppocr
+spec:
+  # 上传模型到指定路径
+  target: minio://modelhub/ppocr/
+  # 模型版本
+  version: latest
+  # 将模型转换为PaddleServing可用的格式
+  convert: inferece
