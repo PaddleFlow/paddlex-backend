@@ -1,18 +1,9 @@
 import argparse
-import datetime
-from distutils.util import strtobool
 import logging
-import yaml
 import launch_crd
 
 from kubernetes import client as k8s_client
 from kubernetes import config
-
-
-def yamlOrJsonStr(str):
-    if str == "" or str == None:
-        return None
-    return yaml.safe_load(str)
 
 
 class SampleSet(launch_crd.K8sCR):
@@ -34,17 +25,20 @@ class SampleSet(launch_crd.K8sCR):
             "apiVersion": "%s/%s" % (self.group, self.version),
             "kind": "SampleSet",
             "metadata": {
-                "name": spec.get("name"),
+                "name": "data-center",
                 "namespace": spec.get("namespace"),
             },
             "spec": {
                 "partitions": spec.get("partitions"),
-                "source": {
-                    "uri": spec.get("source_uri"),
-                    "secretRef": spec.get("secret_name"),
+                "noSync": True,
+                "secretRef": {
+                    "name": "data-center"
                 }
             },
         }
+
+    def get_action_status(self, action=None):
+        return ["Ready"], ["SyncFailed", "PartialReady"]
 
 
 class SampleJob(launch_crd.K8sCR):
@@ -61,6 +55,9 @@ class SampleJob(launch_crd.K8sCR):
         else:
             return False, conditions
 
+    def get_action_status(self, action=None):
+        return ["Succeeded"], ["Failed"]
+
 
 class SyncSampleJob(SampleJob):
 
@@ -75,10 +72,14 @@ class SyncSampleJob(SampleJob):
             "spec": {
                 "type": "sync",
                 "sampleSetRef": {
-                    "name": spec.get("name")
+                    "name": "data-center"
+                },
+                "secretRef": {
+                    "name": spec.get("source_secret")
                 },
                 "syncOptions": {
                     "source": spec.get("source_uri"),
+                    "destination": spec.get("name"),
                 }
             },
         }
@@ -97,76 +98,68 @@ class WarmupSampleJob(SampleJob):
             "spec": {
                 "type": "warmup",
                 "sampleSetRef": {
-                    "name": spec.get("name")
+                    "name": "data-center"
                 },
+                "warmupOptions": {
+                    "paths": [spec.get("name")]
+                }
             },
         }
 
 
 def main():
     parser = argparse.ArgumentParser(description='PaddleJob launcher')
-    parser.add_argument('--name', type=str,
+    parser.add_argument('--name', type=str, required=True,
                         help='The name of DataSet.')
     parser.add_argument('--namespace', type=str,
                         default='kubeflow',
-                        help='PaddleJob namespace.')
-    parser.add_argument('--version', type=str,
-                        default='v1',
-                        help='PaddleJob version.')
+                        help='The namespace of DataSet.')
     parser.add_argument('--action', type=str,
                         default='create',
                         help='Action to execute on PaddleJob.')
-    parser.add_argument('--timeoutMinutes', type=int,
-                        default=60 * 24,
-                        help='Time in minutes to wait for the PaddleJob to reach end')
-    parser.add_argument('--deleteAfterDone', type=strtobool,
-                        default=False,
-                        help='delete PaddleJob after the job is done')
 
-    parser.add_argument('--ps', type=yamlOrJsonStr,
-                        default={},
-                        help='describes the spec of server base on pod template')
-    parser.add_argument('--worker', type=yamlOrJsonStr,
-                        default={},
-                        help='describes the spec of worker base on pod template')
-    parser.add_argument('--heter', type=yamlOrJsonStr,
-                        default={},
-                        help='describes the spec of heter worker base on pod temlate')
-    parser.add_argument('--elastic', type=int,
-                        default=0,
-                        help='indicate the elastic level')
+    parser.add_argument('--partitions', type=int,
+                        default=1,
+                        help='Partitions is the number of SampleSet partitions, partition means cache node.')
+    parser.add_argument('--source_uri', type=str, required=True,
+                        help='Source describes the information of data source uri and secret name.')
+    parser.add_argument('--source_secret', type=str, required=True,
+                        help='SecretRef is reference to the authentication secret for source storage and cache engine.')
+
     args = parser.parse_args()
 
     logging.getLogger().setLevel(logging.INFO)
-    logging.info('Generating PaddleJob template.')
+    logging.info('Generating DataSet template.')
+
+    sample_set_spec = {
+        "name": "data-center",
+        "namespace": args.namespace,
+        "partitions": args.partitions
+    }
+    sync_sample_job_spec = {
+        "name": args.name,
+        "namespace": args.namespace,
+        "source_uri": args.source_uri,
+        "source_secret": args.source_secret
+    }
+    warmup_sample_job_spec = {
+        "name": args.name,
+        "namespace": args.namespace,
+    }
 
     config.load_incluster_config()
     api_client = k8s_client.ApiClient()
+    sample_set = SampleSet(client=api_client)
+    sync_job = SyncSampleJob(client=api_client)
+    warmup_job = WarmupSampleJob(client=api_client)
 
+    sample_set.run(sample_set_spec, action=args.action)
+    sync_job.run(sync_sample_job_spec, action=args.action)
+    warmup_job.run(warmup_sample_job_spec, action=args.action)
 
-    if args.action == "create":
-        response = pdj.create(inst)
-    elif args.action == "patch":
-        response = pdj.patch(inst)
-    elif args.action == "apply":
-        response = pdj.apply(inst)
-    elif args.action == "delete":
-        response = pdj.delete(args.name, args.namespace)
-        print("Delete PaddleJob have response {}".format(response))
-        return
-    else:
-        raise Exception("action must be one of create/patch/apply/delete")
-
-    print("{} PaddleJob have response {}".format(args.action, response))
-
-    expected_conditions = ["Succeed", "Completed"]
-    error_phases = ["Failed", "Terminated"]
-    pdj.wait_for_condition(
-        args.namespace, args.name, expected_conditions, error_phases,
-        timeout=datetime.timedelta(minutes=args.timeoutMinutes))
-
-    if args.deleteAfterDone:
-        pdj.delete(args.name, args.namespace)
+    if args.action != "delete":
+        sync_job.run(sync_sample_job_spec, action="delete")
+        warmup_job.run(warmup_sample_job_spec, action="delete")
 
 
 if __name__ == "__main__":

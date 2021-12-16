@@ -8,4 +8,4 @@ spec:
   # 模型版本
   version: latest
   # 将模型转换为PaddleServing可用的格式
-  convert: inferece
+  convert: inference

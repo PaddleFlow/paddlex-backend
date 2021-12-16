@@ -4,55 +4,24 @@ inputs:
   - {name: Name,                       type: String,                          description: 'The name of DataSet.'}
   - {name: Namespace,                  type: String,      default: kubeflow,  description: 'The namespace which DataSet components run in'}
   - {name: Action,                     type: String,      default: apply,     description: 'Action to execute on Dataset.'}
-  - {name: Timeout Minutes,            type: Integer,     optional: true,     description: 'Time in minutes to wait for the DataSet to be ready.'}
   - {name: Partitions,                 type: Integer,     default: 1,         description: 'Partitions is the number of DataSet partitions, partition means cache node.'}
-  - {name: Source Uri,                 type: string,      optional: true,     description: 'Source describes the information of data source uri and secret name.'}
-  - {name: Secret Ref,                 type: string,      optional: true,     description: 'SecretRef is reference to the authentication secret for source storage and cache engine.'}
+  - {name: Source Uri,                 type: string,                          description: 'Source describes the information of data source uri and secret name.'}
+  - {name: Source Secret,              type: string,                          description: 'SecretRef is reference to the authentication secret for source storage and cache engine.'}
 
 implementation:
   container:
-    image: xiaolao/dataset-operator:latest
+    image: xiaolao/paddlex-backend:latest
     command: [python, dataset.py]
     args:
       - --name
-      - {inputValue: name}
+      - {inputValue: Name}
       - --namespace
-      - {inputValue: namespace}
-      - --version
-      - {inputValue: version}
+      - {inputValue: Namespace}
       - --action
-      - {inputValue: action}
+      - {inputValue: Action}
       - --partitions
-      - {inputValue: partitions}
-      - --noSync
-      - { inputValue: no_sync}
-      - if:
-          cond: {isPresent: timeout_minutes}
-          then:
-            - --timeoutMinutes
-            - {inputValue: timeout_minutes}
-      - if:
-          cond: {isPresent: source}
-          then:
-            - --source
-            - {inputValue: source}
-      - if:
-          cond: {isPresent: secret_ref}
-          then:
-            - --secretRef
-            - {inputValue: secret_ref}
-      - if:
-          cond: {isPresent: csi}
-          then:
-            - --csi
-            - {inputValue: csi}
-      - if:
-          cond: {isPresent: cache}
-          then:
-            - --cache
-            - {inputValue: cache}
-      - if:
-          cond: {isPresent: node_affinity}
-          then:
-            - --nodeAffinity
-            - {inputValue: node_affinity}
+      - {inputValue: Partitions}
+      - --source_uri
+      - {inputValue: Source Uri}
+      - --source_secret
+      - {inputValue: Source Secret}

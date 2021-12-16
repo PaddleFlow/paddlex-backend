@@ -34,7 +34,7 @@ class K8sCR(object):
                            expected_conditions=None,
                            error_phases=None,
                            timeout=datetime.timedelta(days=365),
-                           polling_interval=datetime.timedelta(seconds=30),
+                           polling_interval=datetime.timedelta(seconds=10),
                            status_callback=None,
                            wait_created=False):
         """Waits until any of the specified conditions occur.
@@ -171,15 +171,18 @@ class K8sCR(object):
         return api_response
 
     def run(self, spec, action):
-        spec = self.get_spec(spec)
+        inst_spec = self.get_spec(spec)
+        name = inst_spec.get("metadata").get("name")
+        namespace = inst_spec.get("metadata").get("namespace")
+        print(f"The spec of crd is {inst_spec}")
         if action == "create":
-            response = self.create(spec)
+            response = self.create(inst_spec)
         elif action == "patch":
-            response = self.patch(spec)
+            response = self.patch(inst_spec)
         elif action == "apply":
-            response = self.apply(spec)
+            response = self.apply(inst_spec)
         elif action == "delete":
-            response = self.delete(spec.get("name"), spec.get("namespace"))
+            response = self.delete(name, namespace)
             print(f"Delete {self.group}/{self.version}/{self.plural} have response {response}")
             return
         else:
@@ -187,5 +190,14 @@ class K8sCR(object):
 
         print(f"{action} {self.group}/{self.version}/{self.plural} have response {response}")
 
+        expected_conditions, error_phases = self.get_action_status(action=action)
+
+        self.wait_for_condition(namespace, name,
+                                expected_conditions=expected_conditions,
+                                error_phases=error_phases,)
+
     def get_spec(self, spec):
-        raise NotImplemented("This method must be implemented.")
+        raise NotImplemented("This method must be implemented")
+
+    def get_action_status(self, action=None):
+        raise NotImplemented("This method must be implemented")
