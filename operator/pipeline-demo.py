@@ -22,7 +22,7 @@ def create_dataset_op():
     将样本数据集拉取到训练集群本地并缓存
     :return: DatasetOp
     """
-    dataset_op = components.load_component_from_file("dataset.yaml")
+    dataset_op = components.load_component_from_file("./yaml/dataset.yaml")
     return dataset_op(
         name="icdar2015",
         partitions=1,                 # 缓存分区数
@@ -37,9 +37,9 @@ def create_training_op(volume_op):
     :param volume_op: 共享存储盘
     :return: TrainingOp
     """
-    training_op = components.load_component_from_file("training.yaml")
+    training_op = components.load_component_from_file("./yaml/training.yaml")
     return training_op(
-        name="ppocr",
+        name="ppocr-det",
         dataset="icdar2015",  # 数据集
         project="PaddleOCR",  # Paddle生态项目名
         worker_replicas=1,    # Collective模式Worker并行度
@@ -64,12 +64,11 @@ def create_modelhub_op(volume_op):
     :param volume_op:
     :return:
     """
-    modelhub_op = components.load_component_from_file("modelhub.yaml")
+    modelhub_op = components.load_component_from_file("./yaml/modelhub.yaml")
     return modelhub_op(
-        name="ppocr",
-        target="minio://modelhub/ppocr/",  # 模型存储路径
+        name="ppocr-det",
+        model_name="ppocr-det",            # 模型名称
         version="latest",                  # 模型版本号
-        convert="inference",               # 将模型格式转换为PaddleServing可用的格式
         pvc_name=volume_op.volume.persistent_volume_claim.claim_name,  # 共享存储盘
     )
 
@@ -79,12 +78,14 @@ def create_serving_op():
     部署模型服务
     :return: ServingOp
     """
-    serving_op = components.load_component_from_file("serving.yaml")
+    serving_op = components.load_component_from_file("./yaml/serving.yaml")
     return serving_op(
-        name="ppocr",
-        port="9292",  # Serving使用的端口
-        model_uri="minio://modelhub/ppocr/latest/",                      # 模型存储路径
-        image="registry.baidubce.com/paddleflow-public/serving:v0.6.2",  # PaddleServing镜像
+        name="ppocr-det",
+        model_name="ppocr-det",  # 模型名称
+        model_version="latest",  # 模型版本
+        port=9292,               # Serving使用的端口
+        # PaddleServing镜像
+        image="registry.baidubce.com/paddleflow-public/serving:v0.6.2",
     )
 
 
