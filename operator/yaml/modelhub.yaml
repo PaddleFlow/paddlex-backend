@@ -12,7 +12,7 @@ inputs:
 implementation:
   container:
     image: xiaolao/paddlex-backend:latest
-    command: [python, training.py]
+    command: [python, modelhub.py]
     args:
       - --name
       - {inputValue: Name}

@@ -1,5 +1,4 @@
 import argparse
-import json
 import logging
 import launch_crd
 from launch_crd import logger
@@ -150,8 +149,6 @@ class PaddleJob(launch_crd.K8sCR):
                     }
                 }
             }
-
-        print(f"Debug==== {json.dumps(paddlejob)}")
 
         return paddlejob
 
@@ -536,7 +533,7 @@ def main():
     inference_spec = {
         "name": args.name,
         "namespace": args.namespace,
-        "project": args.project,
+        "project": args.project.lower(),
         "image": args.image,
         "config_path": args.config_path,
         "pretrain_model": args.pretrain_model,
