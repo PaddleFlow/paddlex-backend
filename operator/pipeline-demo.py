@@ -42,7 +42,7 @@ def create_training_op(volume_op):
         name="ppocr",
         dataset="icdar2015",  # 数据集
         project="PaddleOCR",  # Paddle生态项目名
-        worker_replicas=1,    # Collective模式 Worker并行度
+        worker_replicas=1,    # Collective模式Worker并行度
         gpu_per_node=1,       # 指定每个worker所需的GPU个数
         use_visualdl=True,    # 是否启动模型训练日志可视化服务
         train_label="train_icdar2015_label.txt",   # 训练集的label
@@ -51,6 +51,8 @@ def create_training_op(volume_op):
         pvc_name=volume_op.volume.persistent_volume_claim.claim_name,  # 共享存储盘
         # 模型训练镜像
         image="registry.baidubce.com/paddleflow-public/paddleocr:2.1.3-gpu-cuda10.2-cudnn7",
+        # 修改默认模型配置
+        config_changes="Global.epoch_num=10,Global.log_smooth_window=2,Global.save_epoch_step=5",
         # 预训练模型URI
         pretrain_model="https://paddle-imagenet-models-name.bj.bcebos.com/dygraph/MobileNetV3_large_x0_5_pretrained.pdparams",
     )
@@ -65,21 +67,24 @@ def create_modelhub_op(volume_op):
     modelhub_op = components.load_component_from_file("modelhub.yaml")
     return modelhub_op(
         name="ppocr",
-        target="minio://modelhub/ppocr/",
-        version="latest",
-        convert="inference",
-        pvc_name=volume_op.volume.persistent_volume_claim.claim_name,
+        target="minio://modelhub/ppocr/",  # 模型存储路径
+        version="latest",                  # 模型版本号
+        convert="inference",               # 将模型格式转换为PaddleServing可用的格式
+        pvc_name=volume_op.volume.persistent_volume_claim.claim_name,  # 共享存储盘
     )
 
 
 def create_serving_op():
+    """
+    部署模型服务
+    :return: ServingOp
+    """
     serving_op = components.load_component_from_file("serving.yaml")
     return serving_op(
         name="ppocr",
-        port="9292",
-        model_uri="minio://modelhub/ppocr/latest/",
-        image="registry.baidubce.com/paddleflow-public/serving:v0.6.2",
-        command="python3 -m paddle_serving_server.serve --model ppocr/server --port 9292"
+        port="9292",  # Serving使用的端口
+        model_uri="minio://modelhub/ppocr/latest/",                      # 模型存储路径
+        image="registry.baidubce.com/paddleflow-public/serving:v0.6.2",  # PaddleServing镜像
     )
 
 
@@ -92,8 +97,7 @@ def ppocr_detection_demo():
     volume_op = create_volume_op()
 
     # 拉取远程数据（BOS/HDFS）到训练集群本地，并缓存
-    sampleset_op = create_dataset_op(volume_op)
-    sampleset_op.after(volume_op)
+    sampleset_op = create_dataset_op()
 
     # 采用Collective模型分布式训练ppocr模型，并提供模型训练可视化服务
     training_op = create_training_op(volume_op)

@@ -111,15 +111,12 @@ def main():
     parser = argparse.ArgumentParser(description='PaddleJob launcher')
     parser.add_argument('--name', type=str, required=True,
                         help='The name of DataSet.')
-    parser.add_argument('--namespace', type=str,
-                        default='kubeflow',
+    parser.add_argument('--namespace', type=str, default='kubeflow',
                         help='The namespace of DataSet.')
-    parser.add_argument('--action', type=str,
-                        default='create',
+    parser.add_argument('--action', type=str, default='apply',
                         help='Action to execute on PaddleJob.')
 
-    parser.add_argument('--partitions', type=int,
-                        default=1,
+    parser.add_argument('--partitions', type=int, default=1,
                         help='Partitions is the number of SampleSet partitions, partition means cache node.')
     parser.add_argument('--source_uri', type=str, required=True,
                         help='Source describes the information of data source uri and secret name.')

@@ -1,5 +1,5 @@
-name: SampleSet
-description: SampleSet Launcher
+name: Dataset
+description: Dataset Operator
 inputs:
   - {name: Name,                       type: String,                          description: 'The name of DataSet.'}
   - {name: Namespace,                  type: String,      default: kubeflow,  description: 'The namespace which DataSet components run in'}

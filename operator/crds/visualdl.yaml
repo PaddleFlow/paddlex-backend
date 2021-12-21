@@ -1,8 +1,0 @@
-apiVersion: visualdl.paddlepaddle.org/v1alpha
-kind: VisualDL
-metadata:
-  name: ppocr
-spec:
-  # 模型训练日志
-  logDir: /mnt/ppocr/logs/
-  modelPath: /mnt/ppocr/

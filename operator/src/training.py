@@ -1,4 +1,5 @@
 import argparse
+import json
 import logging
 import launch_crd
 from launch_crd import logger
@@ -49,10 +50,16 @@ class PaddleJob(launch_crd.K8sCR):
             for change in config_changes:
                 command += f"{change.strip(' ')} "
 
+        if spec.get("use_visualdl", None):
+            command += "Global.use_visualdl=True "
+
         command += "Global.save_model_dir=/mnt/task-center/models/ "
         command += "Global.save_inference_dir=/mnt/task-center/inference/ "
         if pretrain_model is not None and len(pretrain_model) != 0:
-            command += f"Global.pretrained_model=/mnt/task-center/pretrain_model/{pretrain_model} "
+            pdparams = pretrain_model.split("/")[-1].split(".")
+            if len(pdparams) != 2:
+                raise Exception("The format of pretrain_model is not valid")
+            command += f"Global.pretrained_model=/mnt/task-center/pretrain_model/{pdparams[0]} "
 
         command += f"Train.dataset.data_dir=/mnt/data-center/{spec.get('dataset')}/ "
         if spec.get("train_label") is not None:
@@ -64,6 +71,7 @@ class PaddleJob(launch_crd.K8sCR):
         return command
 
     def get_spec(self, spec):
+        command = self.get_command(spec)
 
         volume_mounts = [
             {
@@ -81,7 +89,7 @@ class PaddleJob(launch_crd.K8sCR):
             "image": spec.get("image"),
             "command": ["/bin/bash"],
             "args": [
-                "-c", spec.get("command")
+                "-c", command
             ],
         }
 
@@ -112,7 +120,7 @@ class PaddleJob(launch_crd.K8sCR):
                         "nvidia.com/gpu": spec.get("gpu_per_node")
                     }
                 }
-            paddlejob["worker"] = {
+            paddlejob["spec"]["worker"] = {
                 "replicas": spec.get("worker_replicas"),
                 "template": {"spec": {
                     "containers": [worker_container],
@@ -134,7 +142,7 @@ class PaddleJob(launch_crd.K8sCR):
             }
 
         if spec.get("ps_replicas", 0) > 0:
-            paddlejob["ps"] = {
+            paddlejob["spec"]["ps"] = {
                 "replicas": spec.get("ps_replicas"),
                 "template": {
                     "spec": {
@@ -142,6 +150,8 @@ class PaddleJob(launch_crd.K8sCR):
                     }
                 }
             }
+
+        print(f"Debug==== {json.dumps(paddlejob)}")
 
         return paddlejob
 
@@ -157,8 +167,9 @@ class VisualDL(launch_crd.K8sCR):
         return ["Available", "Progressing"], []
 
     def get_spec(self, spec):
-        logdir = "/mnt/task-center/models/vdl/"
-        model = f"/mnt/task-center/{spec.get('name')}/server/__model__"
+        command = "python -m pip install visualdl -i https://mirror.baidu.com/pypi/simple && "
+        command += f"visualdl --logdir /mnt/task-center/models/vdl/ --port 8040 "
+        command += f"--model /mnt/task-center/{spec.get('name')}/server/__model__"
 
         return {
             "apiVersion": "apps/v1",
@@ -191,7 +202,7 @@ class VisualDL(launch_crd.K8sCR):
                                 "mountPath": "/mnt/task-center/",
                             }],
                             "command": ["/bin/bash"],
-                            "args": ["-c", f"visualdl --logdir {logdir} --model {model}"],
+                            "args": ["-c", command],
                             "ports": [{
                                 "name": "http",
                                 "containerPort": 8040
@@ -220,10 +231,36 @@ class JobOp(launch_crd.K8sCR):
 
 class InferenceOp(JobOp):
 
+    def get_command(self, spec):
+        project = spec.get("project")
+        if project == "paddleocr":
+            return self.get_ocr_command(spec)
+        else:
+            raise Exception(f"{project} is not supported now")
+
+    def get_ocr_command(self, spec):
+        command = f"python tools/export_model.py -c {spec.get('config_path')} -o "
+        command += "Global.save_model_dir=/mnt/task-center/models/ "
+        command += "Global.save_inference_dir=/mnt/task-center/inference/ "
+
+        pretrain_model = spec.get("pretrain_model", None)
+        if pretrain_model is not None and len(pretrain_model) != 0:
+            pdparams = pretrain_model.split("/")[-1].split(".")
+            if len(pdparams) != 2:
+                raise Exception("The format of pretrain_model is not valid")
+            command += f"Global.pretrained_model=/mnt/task-center/pretrain_model/{pdparams[0]} "
+        return command
+
     def get_spec(self, spec):
+        command = self.get_command(spec)
+
         container = {
+            "name": "save-inference",
             "image": spec.get("image"),
             "command": ["/bin/bash"],
+            "args": [
+                "-c", command
+            ],
             "volumeMounts": [{
                 "name": "task-center",
                 "mountPath": "/mnt/task-center/",
@@ -248,6 +285,7 @@ class InferenceOp(JobOp):
                 "template": {
                     "spec": {
                         "containers": [container],
+                        "restartPolicy": "Never",
                         "volumes": [{
                             "name": "task-center",
                             "persistentVolumeClaim": {
@@ -264,30 +302,31 @@ class InferenceOp(JobOp):
 class ConvertOp(JobOp):
 
     def get_spec(self, spec):
-        mount_path = ""
-        model_name = ""
-        dirname = ""
-        pdmodel = ""
-        pdiparams = ""
+        mount_path = "/mnt/task-center/"
+        model_name = spec.get("name")
+        dirname = "/mnt/task-center/inference/"
+        pdmodel = "inference.pdmodel"
+        pdiparams = "inference.pdiparams"
 
         convert_shell = """
-        mount_path=$0
-        model_name=$1
-        dirname=$2
-        pdmodel=$3
-        pdiparams=$4
+mount_path=$0
+model_name=$1
+dirname=$2
+pdmodel=$3
+pdiparams=$4
 
-        cd $mount_path && mkdir -p $model_name
-        echo "mkdir dir ${model_name} successfully"
+cd $mount_path && mkdir -p $model_name
+echo "mkdir dir ${model_name} successfully"
 
-        python3 -m paddle_serving_client.convert --dirname $dirname --model_filename $pdmodel --params_filename $pdiparams --serving_server ./${model_name}/server/ --serving_client ./${model_name}/client/
-        echo "convert ${model_name} format suucessfully"
+python3 -m paddle_serving_client.convert --dirname $dirname --model_filename $pdmodel --params_filename $pdiparams --serving_server ./${model_name}/server/ --serving_client ./${model_name}/client/
+echo "convert ${model_name} format successfully"
 
-        tar czf ${model_name}.tar.gz ${model_name}/
-        echo "compress and tar ${model_name} suucessfully"
-        """
+tar czf ${model_name}.tar.gz ${model_name}/
+echo "compress and tar ${model_name} successfully"
+"""
 
         container = {
+            "name": "converter",
             "image": "registry.baidubce.com/paddleflow-public/serving:v0.6.2",
             "command": ["sh", "-exc", convert_shell],
             "args": [mount_path, model_name, dirname, pdmodel, pdiparams],
@@ -308,6 +347,7 @@ class ConvertOp(JobOp):
                 "template": {
                     "spec": {
                         "containers": [container],
+                        "restartPolicy": "Never",
                         "volumes": [{
                             "name": "task-center",
                             "persistentVolumeClaim": {
@@ -423,21 +463,19 @@ def main():
     parser = argparse.ArgumentParser(description='PaddleJob launcher')
     parser.add_argument('--name', type=str,
                         help='The name of DataSet.')
-    parser.add_argument('--namespace', type=str,
-                        default='kubeflow',
+    parser.add_argument('--namespace', type=str, default='kubeflow',
                         help='The namespace of training task.')
-    parser.add_argument('--action', type=str,
-                        default='apply',
+    parser.add_argument('--action', type=str, default='apply',
                         help='Action to execute on training task.')
 
     parser.add_argument('--project', type=str, required=True,
-                        help='The project name of paddlepaddle ecosystem such as PaddleOCR')
+                        help='The project name of PaddlePaddle ecosystem such as PaddleOCR.')
     parser.add_argument('--image', type=str, required=True,
                         help='The image of paddle training job which contains model training scripts.')
     parser.add_argument('--config_path', type=str, required=True,
-                        help='The path of model config, it is relative path from root path of project')
-    parser.add_argument('--config_changes', type=str, required=True,
-                        help='The key value pair of model config items, separate by comma, such as epoch=20.')
+                        help='The path of model config, it is relative path from root path of project.')
+    parser.add_argument('--config_changes', type=str, default=None,
+                        help='The key value pair of model config items, separate by comma, such as Global.epoch=20.')
     parser.add_argument('--pretrain_model', type=str, default=None,
                         help='The uri of pretrained models where it store in.')
     parser.add_argument('--dataset', type=str, required=True,
@@ -456,10 +494,10 @@ def main():
                         help='Specified the number of gpu that training job requested.')
     parser.add_argument('--use_visualdl', type=strtobool, default=False,
                         help='Specified whether use VisualDL, this will be work only when worker replicas is 1.')
-    parser.add_argument('--save_inference', type=str, default=None,
-                        help='The command to convert training model to inference model.')
-    # parser.add_argument('--need_convert', type=strtobool, default=True,
-    #                     help='Convert model format so that it can be used by paddle serving.')
+    parser.add_argument('--save_inference', type=strtobool, default=True,
+                        help='Convert training model to inference model.')
+    parser.add_argument('--need_convert', type=strtobool, default=True,
+                        help='Convert inference model to serving model.')
 
     args = parser.parse_args()
 
@@ -472,14 +510,16 @@ def main():
         "project": args.project.lower(),
         "image": args.image,
         "config_path": args.config_path,
+        "config_changes": args.config_changes,
         "pretrain_model": args.pretrain_model,
-        "dataset": args.sample_set,
+        "dataset": args.dataset,
         "train_label": args.train_label,
         "test_label": args.test_label,
         "worker_replicas": args.worker_replicas,
         "ps_replicas": args.ps_replicas,
         "gpu_per_node": args.gpu_per_node,
         "pvc_name": args.pvc_name,
+        "use_visualdl": args.use_visualdl,
     }
 
     visualdl_spec = {
@@ -496,19 +536,28 @@ def main():
     inference_spec = {
         "name": args.name,
         "namespace": args.namespace,
+        "project": args.project,
+        "image": args.image,
+        "config_path": args.config_path,
+        "pretrain_model": args.pretrain_model,
+        "gpu_per_node": args.gpu_per_node,
+        "pvc_name": args.pvc_name,
     }
 
     convert_spec = {
         "name": args.name,
         "namespace": args.namespace,
+        "pvc_name": args.pvc_name,
     }
 
     config.load_incluster_config()
     api_client = k8s_client.ApiClient()
     paddle_job = PaddleJob(client=api_client)
     paddle_job.run(paddle_job_spec, action=args.action)
+    if args.action != "delete":
+       paddle_job.run(paddle_job_spec, action="delete")
 
-    if args.convert_command:
+    if args.save_inference:
         inference_op = InferenceOp(client=api_client)
         inference_op.run(inference_spec, action=args.action)
         if args.action != "delete":
@@ -520,14 +569,11 @@ def main():
         if args.action != "delete":
             convert_op.run(convert_spec, action="delete")
 
-    if args.use_visualdl and args.worker_replicas == 1:
+    if args.use_visualdl:
         visualDL = VisualDL(client=api_client)
         service = Service(client=api_client)
         visualDL.run(visualdl_spec, action=args.action)
         service.run(service_spec, action=args.action)
-
-    if args.action != "delete":
-        paddle_job.run(paddle_job_spec, action="delete")
 
 
 if __name__ == "__main__":

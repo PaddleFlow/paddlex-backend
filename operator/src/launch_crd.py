@@ -51,10 +51,15 @@ class K8sCR(object):
                 invoked after we poll the CR. Callable takes a single argument which is the CR.
               wait_created: wait until the object has been created.
         """
+        if not expected_conditions and not error_phases:
+            logger.info("both expected_conditions and error_phases not be set")
+            return
+
         if expected_conditions is None:
             expected_conditions = []
         if error_phases is None:
             error_phases = []
+
         end_time = datetime.datetime.now() + timeout
         while True:
             try:
@@ -84,10 +89,11 @@ class K8sCR(object):
                         logger.info("Current condition of %s/%s %s in namespace %s is %s.",
                                     self.group, self.plural, name, namespace, condition)
 
-                phase = results.get("status", {}).get("phase", "")
-                if error_phases and phase and phase in error_phases:
+                # phase = results.get("status", {}).get("phase", "")
+                errored, _ = self.is_expected_conditions(results, error_phases)
+                if errored:
                     raise Exception("There are some errors in {0}/{1} {2} in namespace {3}, phase {4}."
-                                    .format(self.group, self.plural, name, namespace, phase))
+                                    .format(self.group, self.plural, name, namespace, condition))
 
             if datetime.datetime.now() + polling_interval > end_time:
                 raise Exception(
