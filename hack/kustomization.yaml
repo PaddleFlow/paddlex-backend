@@ -36,7 +36,6 @@ resources:
   # Kubeflow Istio Resources
   - istio-1-9/kubeflow-istio-resources/base
 
-
   # Kubeflow Pipelines
   - pipeline-multi-user/upstream/env/platform-agnostic-multi-user
   # Central Dashboard
@@ -51,7 +50,6 @@ resources:
   - profiles/upstream/overlays/kubeflow
   # Volumes Web App
   - volumes-web-app/upstream/overlays/istio
-
 
   # User namespace
   - user-namespace/base
