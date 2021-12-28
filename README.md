@@ -122,3 +122,64 @@ $ kubectl apply -f ./prerequisites/task-center.yaml
 ## 示例
 
 更多示例可以参考 [PP-OCR Pipeline](./operator/README.md)。
+
+## API
+
+**Dataset API 相关的字段：**
+
+|字段 |类型 |说明 |
+|---|---|---|
+|name|String|数据集名称，如：imagenet|
+|namespace|String|命名空间，默认为kubeflow|
+|action|String|对自定义资源的操作，apply/create/patch/delete之一|
+|partitions|Integer|样本数据集缓存分区数，一个分区表示一个节点，默认为1|
+|source_uri|String|样本数据的存储地址，如 bos://paddleflow/imagenet/|
+|source_secret|String|样本数据存储后端的访问秘钥|
+
+**Training API 相关的字段：**
+
+|字段 |类型 |说明 |
+|---|---|---|
+|name|String|模型名称，如: pp-ocr|
+|namespace|String|命名空间，默认为kubeflow|
+|action|String|对自定义资源的操作，apply/create/patch/delete之一|
+|project|String|飞桨生态套件项目名，如 PaddleOCR/PaddleClas等|
+|image|String|包含飞桨生态套件代码的模型训练镜像|
+|config_path|String|模型配置文件的在套件项目中的相对路径|
+|dataset|String|模型训练任务用到的样本数据集|
+|pvc_name|String|工作流共享盘的PVC名称|
+|worker_replicas|Integer|分布式训练 Worker 节点的并行度|
+|config_changes|String|模型配置文件修改内容|
+|pretrain_model|String|预训练模型存储路径|
+|train_label|String|训练集的样本标签文件名|
+|test_label|String|测试集的样本标签文件名|
+|ps_replicas|Integer|分布式训练参数服务器并行度|
+|gpu_per_node|Integer|每个 Worker 节点所需的GPU个数|
+|use_visualdl|Boolean|是否开启模型训练日志可视化服务，默认为False|
+|save_inference|Boolean|是否需要保存推理可以格式的模型文件，默认为True|
+|need_convert|Boolean|是否需要将模型格式转化为Serving可用的格式，默认为True|
+
+**ModelHub API 相关的字段：**
+
+|字段 |类型 |说明 |
+|---|---|---|
+|name|String|模型名称，如: pp-ocr|
+|namespace|String|命名空间，默认为kubeflow|
+|action|String|对自定义资源的操作，apply/create/patch/delete之一|
+|endpoint|String|模型中心的URI，默认为http://minio-service.kubeflow:9000|
+|model_name|String|模型名称，与 Training API 的模型名称要保持一致|
+|model_version|String|模型版本，默认为 latest|
+|pvc_name|String|工作流共享盘的PVC名称|
+
+**Serving API 相关的字段：**
+
+|字段 |类型 |说明 |
+|---|---|---|
+|name|String|模型名称，如: pp-ocr|
+|namespace|String|命名空间，默认为kubeflow|
+|action|String|对自定义资源的操作，apply/create/patch/delete之一|
+|image|String|包含 Paddle Serving 依赖的模型服务镜像|
+|model_name|String|模型名称，与 Training API 的模型名称要保持一致|
+|model_version|String|模型版本，与 ModelHub API 中的模型版本要保持一致|
+|endpoint|String|模型中心的URI，默认为http://minio-service.kubeflow:9000|
+|port|Integer|模型服务的端口号，默认为8040|
