@@ -18,6 +18,27 @@ def create_volume_op():
     ).add_pod_annotation(name="pipelines.kubeflow.org/max_cache_staleness", value="P0D")
 
 
+def create_resource_op():
+    data_source_secret = {
+        "apiVersion": "v1",
+        "kind": "Secret",
+        "metadata": {
+            "name": "data-source",
+            "namespace": "kubeflow",
+        },
+        "type": "Opaque",
+        "data": {
+            "name": "ZW1wdHkgc2VjcmV0Cg=="
+        }
+    }
+
+    return dsl.ResourceOp(
+        name="Data Source Secret",
+        action='apply',
+        k8s_resource=data_source_secret,
+    ).set_display_name("create data source secret for SampleJob")
+
+
 def create_dataset_op():
     """
     将样本数据集拉取到训练集群本地并缓存
@@ -98,9 +119,13 @@ def ppocr_detection_demo():
     # 创建 ppocr pipeline 各步骤所需的存储盘
     volume_op = create_volume_op()
 
+    # 创建数据源 Secret
+    secret_op = create_resource_op()
+
     # 拉取远程数据（BOS/HDFS）到训练集群本地，并缓存
     dataset_op = create_dataset_op()
     dataset_op.execution_options.caching_strategy.max_cache_staleness = "P0D"
+    dataset_op.after(secret_op)
 
     # 采用Collective模型分布式训练ppocr模型，并提供模型训练可视化服务
     training_op = create_training_op(volume_op)
