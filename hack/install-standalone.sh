@@ -12,8 +12,8 @@ kubectl apply -f ./pipeline-standalone/knative/net-istio.yaml;
 sleep 10;
 
 # 3. install pipeline standalone
-kubectl apply -f ./pipeline-standalone/pipeline/crds.yaml;
 kubectl apply -f ./pipeline-standalone/pipeline/namespace.yaml;
+kubectl apply -f ./pipeline-standalone/pipeline/crds.yaml;
 kubectl apply -f ./pipeline-standalone/pipeline/deploys.yaml;
 sleep 10;
 
